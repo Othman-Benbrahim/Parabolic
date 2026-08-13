@@ -102,22 +102,25 @@ public class MainWindowController
 
     public Uri? UrlFromArgs
     {
-        get
+        get => ParseUrlFromArguments(_argumentsService.Data);
+    }
+
+    public static Uri? ParseUrlFromArguments(IEnumerable<string> arguments)
+    {
+        foreach (var argument in arguments)
         {
-            for (var i = 0; i < _argumentsService.Data.Count; i++)
+            var urlText = argument.Trim();
+            if (urlText.StartsWith("parabolic://", StringComparison.OrdinalIgnoreCase))
             {
-                var urlText = _argumentsService.Data[i].Trim();
-                if (urlText.StartsWith("parabolic://", StringComparison.Ordinal))
-                {
-                    urlText = urlText.Replace("parabolic://", "https://");
-                }
-                if (Uri.TryCreate(urlText, UriKind.Absolute, out var url))
-                {
-                    return url;
-                }
+                urlText = $"https://{urlText["parabolic://".Length..]}";
             }
-            return null;
+            if (Uri.TryCreate(urlText, UriKind.Absolute, out var url)
+                && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps))
+            {
+                return url;
+            }
         }
+        return null;
     }
 
     public async Task CheckForUpdatesAsync(bool showNotificationForNoUpdates)
