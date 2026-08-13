@@ -42,21 +42,42 @@ function candidateDetails(candidate) {
   if (candidate.mime) {
     details.push(candidate.mime.replace(/^application\//, ""));
   }
+  if (candidate.streamTypes?.length) {
+    details.push(candidate.streamTypes.join(" + "));
+  }
   return details;
 }
 
-async function openInParabolic(url) {
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function openInParabolic(url, button) {
+  const errorState = document.getElementById("errorState");
+  const statusState = document.getElementById("statusState");
+  errorState.hidden = true;
+  statusState.textContent = "Sending to Parabolic…";
+  statusState.hidden = false;
+  if (button) {
+    button.disabled = true;
+  }
   try {
+    // Give Firefox enough time to paint the status before switching to the desktop app.
+    await delay(350);
     await browser.runtime.sendMessage({
       type: "open-parabolic",
       tabId: activeTab.id,
       url
     });
-    window.close();
+    statusState.textContent = "Sent to Parabolic. You can keep browsing in Firefox.";
   } catch (error) {
-    const errorState = document.getElementById("errorState");
     errorState.textContent = error.message || "Unable to open Parabolic.";
     errorState.hidden = false;
+    statusState.hidden = true;
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
   }
 }
 
@@ -94,7 +115,7 @@ function renderCandidate(candidate) {
   button.className = "download-button";
   button.type = "button";
   button.textContent = "Download";
-  button.addEventListener("click", () => openInParabolic(candidate.url));
+  button.addEventListener("click", () => openInParabolic(candidate.url, button));
 
   copy.append(title, meta, url);
   item.append(copy, button);
@@ -114,8 +135,9 @@ async function loadPopup() {
     document.getElementById("pageHost").textContent = activeTab.url || "";
   }
 
-  document.getElementById("downloadPageButton").addEventListener("click", () => {
-    openInParabolic(activeTab.url);
+  const downloadPageButton = document.getElementById("downloadPageButton");
+  downloadPageButton.addEventListener("click", () => {
+    openInParabolic(activeTab.url, downloadPageButton);
   });
   document.getElementById("settingsButton").addEventListener("click", () => {
     browser.runtime.openOptionsPage();

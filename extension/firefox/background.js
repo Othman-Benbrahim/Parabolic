@@ -46,6 +46,56 @@ function getExtension(url) {
   }
 }
 
+function isYouTubePageUrl(value) {
+  try {
+    const url = new URL(value);
+    return ["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"].includes(url.hostname)
+      && ["/watch", "/shorts/", "/live/"].some((path) => url.pathname === path || url.pathname.startsWith(path));
+  } catch (_) {
+    return false;
+  }
+}
+
+function isGoogleVideoPlaybackUrl(value) {
+  try {
+    const url = new URL(value);
+    return (url.hostname === "googlevideo.com" || url.hostname.endsWith(".googlevideo.com"))
+      && url.pathname.endsWith("/videoplayback");
+  } catch (_) {
+    return false;
+  }
+}
+
+async function detectYouTubeMedia(details) {
+  if (!settings.detectMedia || details.tabId < 0 || !isGoogleVideoPlaybackUrl(details.url)) {
+    return false;
+  }
+
+  try {
+    const tab = await browser.tabs.get(details.tabId);
+    if (!isYouTubePageUrl(tab.url)) {
+      return false;
+    }
+    const streamUrl = new URL(details.url);
+    const streamMime = (streamUrl.searchParams.get("mime") || "").toLowerCase();
+    const streamKind = streamMime.startsWith("audio/") ? "audio" : "video";
+    addMedia(details.tabId, {
+      url: tab.url,
+      pageUrl: tab.url,
+      source: "youtube-network",
+      kind: "youtube",
+      label: tab.title || "YouTube video",
+      mime: "YouTube adaptive media",
+      streamTypes: [streamKind],
+      frameId: details.frameId,
+      discoveredAt: Date.now()
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function filenameFromHeaders(headers) {
   const disposition = getHeader(headers, "content-disposition");
   const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
@@ -128,6 +178,12 @@ function addMedia(tabId, candidate) {
     ...candidate,
     discoveredAt: candidate.discoveredAt || Date.now()
   };
+  if (previous?.streamTypes || candidate.streamTypes) {
+    merged.streamTypes = [...new Set([
+      ...(previous?.streamTypes || []),
+      ...(candidate.streamTypes || [])
+    ])];
+  }
   for (const field of ["label", "mime", "filename", "pageUrl", "width", "height", "duration", "size"]) {
     if ((merged[field] === "" || merged[field] === null || typeof merged[field] === "undefined")
         && previous?.[field]) {
@@ -250,6 +306,10 @@ browser.storage.onChanged.addListener(async (changes, namespace) => {
 
 browser.webRequest.onHeadersReceived.addListener(
   (details) => {
+    if (isGoogleVideoPlaybackUrl(details.url)) {
+      detectYouTubeMedia(details);
+      return;
+    }
     const candidate = classifyNetworkMedia(details);
     if (candidate) {
       addMedia(details.tabId, candidate);
