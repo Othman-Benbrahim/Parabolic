@@ -1,0 +1,39 @@
+name: Firefox Add-on
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "extension/firefox/**"
+      - ".github/workflows/firefox.yml"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "extension/firefox/**"
+      - ".github/workflows/firefox.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-firefox-addon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      - name: Validate add-on
+        run: npx --yes addons-linter extension/firefox
+      - name: Package unsigned XPI
+        working-directory: extension/firefox
+        run: |
+          version=$(node -p "require('./manifest.json').version")
+          zip -r "../../parabolic-media-detector-${version}-unsigned.xpi" \
+            manifest.json background.js utils.js media-detector.js \
+            popup.html popup.css popup.js options.html options.js icons
+      - uses: actions/upload-artifact@v4
+        with:
+          name: parabolic-media-detector-firefox
+          path: parabolic-media-detector-*-unsigned.xpi
