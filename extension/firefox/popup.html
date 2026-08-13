@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parabolic Media Detector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Parabolic</h1>
+        <p>Media detected in this tab</p>
+      </div>
+      <button id="settingsButton" class="icon-button" type="button" title="Settings" aria-label="Open settings">⚙</button>
+    </header>
+
+    <section id="pageSection" class="page-section">
+      <div class="page-copy">
+        <strong id="pageTitle">Current page</strong>
+        <span id="pageHost"></span>
+      </div>
+      <button id="downloadPageButton" class="primary-button" type="button">Analyze page</button>
+    </section>
+
+    <div class="section-heading">
+      <span id="mediaCount">Detected sources</span>
+      <button id="clearButton" class="text-button" type="button">Clear</button>
+    </div>
+
+    <section id="mediaList" class="media-list" aria-live="polite"></section>
+    <p id="emptyState" class="empty-state" hidden>
+      Start playing a video to detect its media streams. You can still send the page directly to Parabolic.
+    </p>
+    <p id="errorState" class="error-state" hidden></p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
