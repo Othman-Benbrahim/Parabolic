@@ -7,6 +7,8 @@
 - **Lightweight & Fast**: Designed to be fast, unobtrusive, easy to use, and respects your privacy.
 - **Firefox Media Detection**: The Firefox version detects HTML5 video/audio, HLS playlists and DASH manifests, including media loaded in embedded frames.
 - **Detected Sources Popup**: Click the Firefox toolbar icon to analyze the current page or send a detected stream directly to Parabolic.
+- **YouTube Adaptive Detection**: Firefox recognizes YouTube's `googlevideo.com` media traffic and groups audio/video requests under the stable watch-page URL.
+- **Existing Instance Activation**: On Windows, links are forwarded to an already running Parabolic window instead of being dropped.
 
 # Installation
 > [!NOTE]  
