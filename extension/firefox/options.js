@@ -1,21 +1,23 @@
-// Load saved settings when options opens
-document.addEventListener('DOMContentLoaded', () => {
-  browser.storage.sync.get(['trimPlaylist', 'showContextMenu']).then((result) => {
-    if (browser.runtime.lastError) {
-      console.error('Storage error:', browser.runtime.lastError);
-      return;
+const DEFAULT_SETTINGS = {
+  trimPlaylist: false,
+  showContextMenu: true,
+  detectMedia: true,
+  showMediaBadge: true
+};
+
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const settings = await browser.storage.sync.get(DEFAULT_SETTINGS);
+    for (const key of Object.keys(DEFAULT_SETTINGS)) {
+      document.getElementById(key).checked = settings[key];
     }
-    document.getElementById('trimPlaylist').checked = (result && result.trimPlaylist) || false;
-    document.getElementById('contextMenuToggle').checked = (result && (typeof result.showContextMenu !== 'undefined' ? result.showContextMenu : true));
+  } catch (error) {
+    console.error("Unable to load settings:", error);
+  }
+});
+
+for (const key of Object.keys(DEFAULT_SETTINGS)) {
+  document.getElementById(key).addEventListener("change", (event) => {
+    browser.storage.sync.set({ [key]: event.target.checked });
   });
-});
-
-// Save/show Trim Playlist setting
-document.getElementById('trimPlaylist').addEventListener('change', (e) => {
-  browser.storage.sync.set({ trimPlaylist: e.target.checked });
-});
-
-// Save/show Context Menu setting
-document.getElementById('contextMenuToggle').addEventListener('change', (e) => {
-  chrome.storage.sync.set({ showContextMenu: e.target.checked });
-});
+}
