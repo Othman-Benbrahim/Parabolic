@@ -16,11 +16,23 @@ public static partial class Program
     private static void Main(string[] args)
     {
         XamlCheckProcessRequirements();
+        if (!SingleInstanceManager.TryAcquire())
+        {
+            SingleInstanceManager.ForwardArguments(args);
+            return;
+        }
         var builder = Host.CreateApplicationBuilder(args);
         builder.ConfigureParabolic(args);
         builder.ConfigureWinUI<App>();
         builder.Services.AddControls();
         var app = builder.Build();
-        app.Run();
+        try
+        {
+            app.Run();
+        }
+        finally
+        {
+            SingleInstanceManager.Dispose();
+        }
     }
 }
