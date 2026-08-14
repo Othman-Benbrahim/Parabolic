@@ -429,8 +429,7 @@ function normalizedDownloadPayload(message, sender) {
 async function requestNativeDownload(message, sender) {
   const payload = normalizedDownloadPayload(message, sender);
   try {
-    // yt-dlp has to inspect the page before the host can enqueue the download.
-    // Some extractors legitimately take longer than a normal extension request.
+    // Exact formats require discovery; quick presets are enqueued immediately.
     const response = await nativeBridge.request("download", payload, 120000);
     const downloadId = response.payload?.downloadId || response.downloadId;
     if (downloadId && Number.isInteger(payload.tabId)) {
@@ -516,6 +515,13 @@ async function loadSettings() {
   settings = { ...DEFAULT_SETTINGS, ...(await browser.storage.sync.get(DEFAULT_SETTINGS)) };
 }
 
+async function initializeBackground() {
+  await loadSettings();
+  await createContextMenu();
+  // Start and keep the native host ready before the user's first download click.
+  await probeNativeBridge();
+}
+
 browser.runtime.onInstalled.addListener(async () => {
   const stored = await browser.storage.sync.get(Object.keys(DEFAULT_SETTINGS));
   const missingDefaults = {};
@@ -527,16 +533,12 @@ browser.runtime.onInstalled.addListener(async () => {
   if (Object.keys(missingDefaults).length > 0) {
     await browser.storage.sync.set(missingDefaults);
   }
-  await loadSettings();
-  await createContextMenu();
+  await initializeBackground();
 });
 
-browser.runtime.onStartup.addListener(async () => {
-  await loadSettings();
-  await createContextMenu();
-});
+browser.runtime.onStartup.addListener(initializeBackground);
 
-loadSettings().then(createContextMenu).catch(console.error);
+initializeBackground().catch(console.error);
 
 browser.storage.onChanged.addListener(async (changes, namespace) => {
   if (namespace !== "sync") {

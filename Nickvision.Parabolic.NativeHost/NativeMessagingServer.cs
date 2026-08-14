@@ -153,27 +153,33 @@ internal sealed class NativeMessagingServer : IDisposable
         var mediaRequest = DeserializePayload(request, NativeJsonContext.Default.MediaRequest);
         ValidatePreset(mediaRequest.Preset);
         var externalId = ($"download-{Guid.NewGuid():N}")[..21];
-        await SendEventAsync(new DownloadEventPayload
-        {
-            DownloadId = externalId,
-            TabId = mediaRequest.TabId,
-            Status = "analyzing"
-        });
-
-        var discovery = await ResolveDiscoveryAsync(mediaRequest, cancellationToken);
-        CachedFormat? selectedFormat = null;
+        DownloadOptions options;
         if (!string.IsNullOrWhiteSpace(mediaRequest.FormatId))
         {
+            await SendEventAsync(new DownloadEventPayload
+            {
+                DownloadId = externalId,
+                TabId = mediaRequest.TabId,
+                Status = "analyzing"
+            });
+
+            var discovery = await ResolveDiscoveryAsync(mediaRequest, cancellationToken);
             EnsureFormatChoices(discovery);
-            if (!discovery.Formats.TryGetValue(mediaRequest.FormatId, out selectedFormat))
+            if (!discovery.Formats.TryGetValue(mediaRequest.FormatId, out var selectedFormat))
             {
                 throw new NativeRequestException(
                     "INVALID_FORMAT",
                     "The requested format was not returned by Parabolic for this media.");
             }
+            options = BuildDiscoveredDownloadOptions(mediaRequest, discovery, selectedFormat);
+        }
+        else
+        {
+            // Quick presets do not need a preliminary yt-dlp discovery. The download
+            // process performs its own extraction, so enqueue it immediately.
+            options = BuildDirectDownloadOptions(mediaRequest);
         }
 
-        var options = BuildDownloadOptions(mediaRequest, discovery, selectedFormat);
         var session = new DownloadSession(externalId, mediaRequest.TabId, options.Url);
         await _downloadMutationLock.WaitAsync(cancellationToken);
         try
@@ -302,11 +308,41 @@ internal sealed class NativeMessagingServer : IDisposable
             lastException ?? new InvalidOperationException("No media candidates succeeded."));
     }
 
-    private DownloadOptions BuildDownloadOptions(MediaRequest request, CachedDiscovery discovery, CachedFormat? selectedFormat)
+    private DownloadOptions BuildDirectDownloadOptions(MediaRequest request)
+    {
+        var candidates = new List<Uri>(3);
+        AddCandidate(candidates, request.PageUrl);
+        AddCandidate(candidates, request.FrameUrl);
+        AddCandidate(candidates, request.MediaUrl);
+        if (candidates.Count == 0)
+        {
+            throw new NativeRequestException("INVALID_URL", "Parabolic accepts only HTTP and HTTPS media URLs.");
+        }
+
+        var title = string.IsNullOrWhiteSpace(request.Title)
+            ? "Media"
+            : request.Title.SanitizeForFilename(_configurationService.LimitCharacters).Trim();
+        var isAudio = request.Preset == "audio";
+        var options = new DownloadOptions(candidates[0])
+        {
+            SaveFilename = string.IsNullOrWhiteSpace(title) ? "Media" : title,
+            SaveFolder = _configurationService.PreviousSaveFolder,
+            FileType = isAudio
+                ? _configurationService.PreviousAudioOnlyFileType
+                : _configurationService.PreviousFullFileType
+        };
+        ApplyPreset(options, request.Preset, isAudio);
+        return options;
+    }
+
+    private DownloadOptions BuildDiscoveredDownloadOptions(
+        MediaRequest request,
+        CachedDiscovery discovery,
+        CachedFormat selectedFormat)
     {
         var media = discovery.Media;
         var url = media.Url.IsEmpty ? discovery.SourceUrl : media.Url;
-        var isAudio = selectedFormat?.IsAudio == true || request.Preset == "audio" || media.Type == MediaType.Audio;
+        var isAudio = selectedFormat.IsAudio || request.Preset == "audio" || media.Type == MediaType.Audio;
         var options = new DownloadOptions(url)
         {
             SaveFilename = string.IsNullOrWhiteSpace(media.Title) ? "Media" : media.Title,
@@ -320,26 +356,26 @@ internal sealed class NativeMessagingServer : IDisposable
             RequiresPlaylistItems = media.RequiresPlaylistItems
         };
 
-        if (selectedFormat is not null)
-        {
-            options.FormatSelector = selectedFormat.Selector;
-            return options;
-        }
+        options.FormatSelector = selectedFormat.Selector;
+        return options;
+    }
+
+    private static void ApplyPreset(DownloadOptions options, string preset, bool isAudio)
+    {
         if (isAudio)
         {
             options.VideoFormat = Format.NoneVideo;
             options.AudioFormat = Format.BestAudio;
-            return options;
+            return;
         }
         options.AudioFormat = Format.BestAudio;
-        options.VideoResolution = request.Preset switch
+        options.VideoResolution = preset switch
         {
             "1080" => new VideoResolution(1920, 1080),
             "720" => new VideoResolution(1280, 720),
             "480" => new VideoResolution(854, 480),
             _ => VideoResolution.Best
         };
-        return options;
     }
 
     private void EnsureFormatChoices(CachedDiscovery discovery)
