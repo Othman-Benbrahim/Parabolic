@@ -26,6 +26,7 @@ public class DownloadOptions
     public VideoResolution? VideoResolution { get; set; }
     public double? AudioBitrate { get; set; }
     public string FormatSelector { get; set; }
+    public bool UseSleepPreset { get; set; }
 
     public DownloadOptions(Uri url)
     {
@@ -47,6 +48,7 @@ public class DownloadOptions
         VideoResolution = null;
         AudioBitrate = null;
         FormatSelector = string.Empty;
+        UseSleepPreset = true;
     }
 
     public string SaveFolder

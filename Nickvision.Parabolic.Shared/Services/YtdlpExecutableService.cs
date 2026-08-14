@@ -138,8 +138,6 @@ public class YtdlpExecutableService : DependencyExecutableService, IYtdlpExecuta
             "[Parabolic] Progress;%(progress.status)s;%(progress.downloaded_bytes)s;%(progress.total_bytes)s;%(progress.total_bytes_estimate)s;%(progress.speed)s;%(progress.eta)s",
             "--progress-delta",
             ".75",
-            "-t",
-            "sleep",
             "--no-mtime",
             "--no-embed-info-json",
             "--ffmpeg-location",
@@ -157,6 +155,11 @@ public class YtdlpExecutableService : DependencyExecutableService, IYtdlpExecuta
             "--print",
             "after_move:filepath"
         };
+        if (downloadOptions.UseSleepPreset)
+        {
+            arguments.Add("-t");
+            arguments.Add("sleep");
+        }
         if (downloadOptions.RequiresPlaylistItems && downloadOptions.PlaylistPosition != -1)
         {
             arguments.Add("--playlist-items");

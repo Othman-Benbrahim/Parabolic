@@ -329,7 +329,8 @@ internal sealed class NativeMessagingServer : IDisposable
             SaveFolder = _configurationService.PreviousSaveFolder,
             FileType = isAudio
                 ? _configurationService.PreviousAudioOnlyFileType
-                : _configurationService.PreviousFullFileType
+                : _configurationService.PreviousFullFileType,
+            UseSleepPreset = false
         };
         ApplyPreset(options, request.Preset, isAudio);
         return options;
@@ -353,7 +354,8 @@ internal sealed class NativeMessagingServer : IDisposable
                 ? _configurationService.PreviousAudioOnlyFileType
                 : _configurationService.PreviousFullFileType,
             PlaylistPosition = media.PlaylistPosition,
-            RequiresPlaylistItems = media.RequiresPlaylistItems
+            RequiresPlaylistItems = media.RequiresPlaylistItems,
+            UseSleepPreset = false
         };
 
         options.FormatSelector = selectedFormat.Selector;
