@@ -60,6 +60,15 @@
     <display_length compare="ge">360</display_length>
   </requires>
   <releases>
+    <release version="2026.8.0" date="2026-08-14">
+      <description translate="no">
+        <p>- Added a Firefox in-player download interface backed by Native Messaging on Windows</p>
+        <p>- Added background downloads, quality presets, exact format selection, progress, cancellation, and open-folder actions</p>
+        <p>- Added on-demand stable yt-dlp update detection and installation</p>
+        <p>- Added Windows x64 and ARM64 Native Messaging host packages</p>
+        <p>- Fixed Flatpak x86_64 and aarch64 builds and refreshed bundled FFmpeg sources</p>
+      </description>
+    </release>
     <release version="2026.5.0" date="2026-05-24">
       <description translate="no">
         <p>- Improved time frame downloads to cut with ffmpeg instead of using yt-dlp's broken --download-sections option</p>

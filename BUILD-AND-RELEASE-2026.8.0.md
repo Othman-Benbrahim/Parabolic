@@ -1,8 +1,9 @@
 # Build and release Parabolic 2026.8.0
 
-This adapted release contains two coordinated components:
+This adapted release contains coordinated desktop and browser components:
 
-- Parabolic for Windows `2026.8.0`, including the Firefox Native Messaging host;
+- Parabolic `2026.8.0` for Windows, Linux and macOS;
+- the Windows Firefox Native Messaging host `2026.8.0`;
 - Parabolic Media Detector for Firefox `0.4.0`.
 
 ## Automated Windows build
@@ -69,9 +70,16 @@ architectures, with SHA-256 values verified against the downloaded files.
 If the validation step succeeds but the builder fails, capture the first error
 inside the `flatpak-builder` step rather than the later cancelled matrix job.
 
+## Automated macOS build
+
+The `macOS` workflow creates `Parabolic.app` artifacts for Intel x64 and Apple
+Silicon ARM64. Before publishing, package each application bundle as a ZIP and
+name it with the Parabolic version and architecture.
+
 ## Release gate
 
-Create the public GitHub release only when both workflows are green and the
-manual Firefox/Windows matrix succeeds. Attach the signed installer artifacts,
-publish the signed Firefox XPI separately through Mozilla Add-ons, and retain the
-source commit used by both builds.
+Create the public GitHub release only when the Windows, Flatpak, macOS, Firefox
+and spell-check workflows are green and the manual Firefox/Windows matrix
+succeeds. Attach the versioned platform packages and their SHA-256 file, publish
+the signed Firefox XPI separately through Mozilla Add-ons, and retain the source
+commit used by all builds.

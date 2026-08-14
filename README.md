@@ -1,225 +1,158 @@
 <div align="center">
 
-![](resources/banner.png)
+![Parabolic](resources/banner.png)
 
-# 🎬 Parabolic
+# 🎬 Parabolic Native Bridge Edition
 
-### *A powerful yt-dlp frontend*
+### Download web video and audio from Parabolic or directly inside Firefox
 
-[![Translation status](https://hosted.weblate.org/widgets/nickvision-tube-converter/-/app/svg-badge.svg)](https://hosted.weblate.org/engage/nickvision-tube-converter/)
-[![Powered by Weblate](https://img.shields.io/badge/Powered%20by-Weblate-blue?style=flat-square)](https://weblate.org/en/)
+[![Windows](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/windows.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/windows.yml)
+[![Flatpak](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/flatpak.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/flatpak.yml)
+[![macOS](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/macos.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/macos.yml)
+[![Firefox Add-on](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/firefox.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/firefox.yml)
 
 [Features](#-features) •
+[Firefox integration](#-firefox-integration) •
 [Installation](#-installation) •
-[Screenshots](#-screenshots) •
-[Building](#-building-manually) •
-[Contributing](#-contributing)
+[Building](#-building) •
+[Credits](#-credits)
 
 </div>
+
+> [!NOTE]
+> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Version **2026.8.0** adds a Firefox Native Messaging bridge and coordinated Firefox add-on **0.4.0**.
 
 ## ✨ Features
 
-<table>
-<tr>
-<td width="50%">
+- Download video and audio from the hundreds of websites supported by [yt-dlp](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
+- Export video as MP4 or WebM and audio as MP3, Opus, FLAC or WAV.
+- Run concurrent downloads and retrieve subtitles, thumbnails and metadata.
+- Choose quick quality presets or inspect the exact formats returned by yt-dlp.
+- Update the stable yt-dlp downloader on demand when websites change their formats.
+- Use native WinUI on Windows and the GNOME interface on Linux and macOS.
+- Build and package Windows x64/ARM64, Linux Flatpak x86_64/aarch64 and macOS x64/ARM64.
 
-### 🌐 Versatile Downloads
-Powerful frontend for **yt-dlp** with support for [hundreds of sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)
+## 🦊 Firefox integration
 
-### 🎵 Multiple Formats
-Download in **mp4**, **webm**, **mp3**, **opus**, **flac**, and **wav**
+The Firefox add-on detects a suitable video and places a **Download video** control directly over the player. The main button downloads with the saved preset; its arrow opens quality, exact-format and yt-dlp update actions.
 
-</td>
-<td width="50%">
+On Windows, Firefox communicates with `com.nickvision.parabolic`, a windowless Native Messaging host installed with Parabolic. It can:
 
-### ⚡ Concurrent Downloads
-Run **multiple downloads** at the same time
+- start a download without bringing the Parabolic window to the foreground;
+- use Best, 1080p, 720p, 480p and Audio-only presets;
+- list exact formats and file sizes;
+- report progress, merge status and completion;
+- cancel a download or reveal its destination folder;
+- detect and install the latest stable yt-dlp version on explicit request.
 
-### 📝 Complete Metadata
-Support for downloading **metadata** and **video subtitles**
+The Windows installer is required for this integration because it installs the host manifest and Firefox registry entries. The portable Windows archive contains the host executable but does **not** register Native Messaging automatically.
 
-</td>
-</tr>
-</table>
-
-## ⚖️ Legal Copyright Disclaimer
-
-> [!CAUTION]
-> Videos on YouTube and other sites may be subject to DMCA protection. The authors of Parabolic do not endorse, and are not responsible for, the use of this application in means that will violate these laws.
+The desktop application works on Linux and macOS, but the Firefox Native Messaging bridge in this release is currently packaged for Windows only.
 
 ## 📥 Installation
 
-### Choose your platform
+Download versioned packages from this repository's [Releases](https://github.com/Othman-Benbrahim/Parabolic/releases).
 
-<table>
-<tr>
-<td width="25%">
+### Windows
 
-#### Linux
+1. Download the x64 or ARM64 setup executable for your computer.
+2. Close Firefox and Parabolic.
+3. Run the installer. It can be installed over an earlier adapted build.
+4. Install Firefox add-on `0.4.0`, then reload the video page.
 
-<a href='https://flathub.org/apps/details/org.nickvision.tubeconverter'>
-<img width='200' alt='Download on Flathub' src='https://flathub.org/api/badge?locale=en'/>
-</a>
+Use the installer rather than the portable archive when you want the Firefox bridge.
 
-</td>
-<td width="25%">
+### Firefox add-on
 
-#### Windows
+A permanently installed add-on must be signed by Mozilla. An unsigned XPI from GitHub Actions is intended for development or submission:
 
-<a href="https://github.com/NickvisionApps/Parabolic/releases">
-<img width='180' alt="Download from Releases" src="https://upload.wikimedia.org/wikipedia/commons/e/e2/Windows_logo_and_wordmark_-_2021.svg"/>
-</a>
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Select **Load Temporary Add-on**.
+3. Select the XPI or `extension/firefox/manifest.json`.
 
-Download the latest version from **Releases**
+Temporary add-ons are removed when Firefox closes.
 
-</td>
-<td width="25%">
+### Linux Flatpak
 
-#### macOS
+Download the bundle matching your CPU, then run:
 
-<a href="https://github.com/NickvisionApps/Parabolic/releases">
-<img width='80' alt="Download from Releases" src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/Apple_Computer_Logo_rainbow.svg/250px-Apple_Computer_Logo_rainbow.svg.png"/>
-</a>
+```bash
+flatpak install ./Parabolic-2026.8.0-Linux-x86_64.flatpak
+flatpak run org.nickvision.tubeconverter
+```
 
-Download the latest version from **Releases**
+Use the `aarch64` bundle instead on ARM64 Linux.
 
-</td>
-<td width="25%">
+### macOS
 
-#### Browser Extensions
+Download and extract the x64 or ARM64 archive produced for your Mac, then move `Parabolic.app` to Applications.
 
-[![get-the-addon](extension/resources/firefox.png)](https://addons.mozilla.org/en-US/firefox/addon/parabolic/)
+## ⚖️ Copyright notice
 
-**Chrome:** See [extension folder](https://github.com/NickvisionApps/Parabolic/tree/main/extension) for manual installation instructions
+> [!CAUTION]
+> Videos on YouTube and other websites may be protected by copyright or access restrictions. The project does not endorse downloading material without authorization. Users are responsible for complying with applicable law and each website's terms.
 
-</td>
-</tr>
-</table>
-
-### 🌍 Translation Status
-
-<div align="center">
-
-[![Translation Status](https://hosted.weblate.org/widget/nickvision-tube-converter/multi-auto.svg)](https://hosted.weblate.org/engage/nickvision-tube-converter/)
-
-**Help us translate Parabolic!** [Click here to contribute](https://hosted.weblate.org/projects/nickvision-tube-converter/)
-
-</div>
-
-## 💬 Chat & Community
-
-<div align="center">
-
-Join our community on Matrix!
-
-<a href='https://matrix.to/#/#nickvision:matrix.org'>
-<img width='160' alt='Join our room' src='https://user-images.githubusercontent.com/17648453/196094077-c896527d-af6d-4b43-a5d8-e34a00ffd8f6.png'/>
-</a>
-
-</div>
-
-## 🤝 Contributing
-
-We'd love your contribution! See [**CONTRIBUTING.md**](CONTRIBUTING.md) for details on:
-
-- 🐛 How to report bugs
-- 💡 How to suggest new features
-- 🔧 How to contribute code
-- 📖 How to improve documentation
+DRM decryption is not supported.
 
 ## 📸 Screenshots
 
 <details>
-<summary><b>🖥️ GNOME Interface</b></summary>
+<summary><b>GNOME interface</b></summary>
 
-<br>
-
-| Home Page | Active Downloads |
+| Home | Active downloads |
 |:---:|:---:|
-| ![Home Page](Nickvision.Parabolic.GNOME/Screenshots/Home.png) | ![Downloading](Nickvision.Parabolic.GNOME/Screenshots/Downloading.png) |
+| ![GNOME home](Nickvision.Parabolic.GNOME/Screenshots/Home.png) | ![GNOME downloads](Nickvision.Parabolic.GNOME/Screenshots/Downloading.png) |
 
-| Dark Mode | Add Download |
+| Dark mode | Add download |
 |:---:|:---:|
-| ![Dark Mode](Nickvision.Parabolic.GNOME/Screenshots/DarkMode.png) | ![Add Download Dialog](Nickvision.Parabolic.GNOME/Screenshots/AddDownloadDialog.png) |
+| ![GNOME dark mode](Nickvision.Parabolic.GNOME/Screenshots/DarkMode.png) | ![GNOME add download](Nickvision.Parabolic.GNOME/Screenshots/AddDownloadDialog.png) |
 
 </details>
 
 <details>
-<summary><b>🪟 Windows Interface (WinUI)</b></summary>
+<summary><b>Windows interface</b></summary>
 
-<br>
-
-| Home Page | Active Downloads |
+| Home | Active downloads |
 |:---:|:---:|
-| ![Home Page](Nickvision.Parabolic.WinUI/Screenshots/Home.png) | ![Downloading](Nickvision.Parabolic.WinUI/Screenshots/Downloading.png) |
+| ![Windows home](Nickvision.Parabolic.WinUI/Screenshots/Home.png) | ![Windows downloads](Nickvision.Parabolic.WinUI/Screenshots/Downloading.png) |
 
-| Dark Mode | Add Download |
+| Dark mode | Add download |
 |:---:|:---:|
-| ![Dark Mode](Nickvision.Parabolic.WinUI/Screenshots/DarkMode.png) | ![Add Download Dialog](Nickvision.Parabolic.WinUI/Screenshots/AddDownloadDialog.png) |
-
-</details>
-
-<details>
-<summary><b>🧩 Chrome Extension</b></summary>
-
-<br>
-
-| Options Page | Right Click Menu |
-|:---:|:---:|
-| ![Options Page](extension/resources/Options.png) | ![Right Click Menu](extension/resources/ChromiumContextMenu.png) |
-
-https://github.com/user-attachments/assets/9bd47723-8623-4e47-8e69-d21ac68bdef8
-
-</details>
-
-<details>
-<summary><b>🦊 Firefox Extension</b></summary>
-
-<br>
-
-| Options Page | Right Click Menu |
-|:---:|:---:|
-| ![Options Page](extension/resources/Options.png) | ![Right Click Menu](extension/resources/FirefoxContextMenu.png) |
-
-https://github.com/user-attachments/assets/866cc587-e9c9-4cc0-bb81-e628e9fc2373
+| ![Windows dark mode](Nickvision.Parabolic.WinUI/Screenshots/DarkMode.png) | ![Windows add download](Nickvision.Parabolic.WinUI/Screenshots/AddDownloadDialog.png) |
 
 </details>
 
 ## 🔨 Building
 
-Parabolic is a .NET 10 project and can easily be built on any platform. Besides .NET 10, the following are required system dependencies for building each project:
+Parabolic targets **.NET 10**.
 
-### 📦 Dependencies
+Additional GNOME dependencies are GTK4, libadwaita and blueprint-compiler. Windows builds require the Windows App SDK and gettext tooling.
 
-#### Shared
-- [gettext](https://www.gnu.org/software/gettext/)
-  - Can be installed on Windows using `msys2`
-
-#### WinUI
-- [WindowsAppSDK](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/)
-
-#### GNOME
-- [Gtk4](https://docs.gtk.org/gtk4/)
-- [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita)
-- [blueprint-compiler](https://gitlab.gnome.org/GNOME/blueprint-compiler)
-  - Can be installed on Windows using `msys2`
-
-### 🏗️ Build Process
-
-Once all dependencies are available on the system, simply run:
-
-**WinUI:**
 ```bash
-dotnet run --project Nickvision.Parabolic.WinUI
-```
-
-**GNOME:**
-```bash
+# GNOME desktop application
 dotnet run --project Nickvision.Parabolic.GNOME
 ```
 
-## 📜 Code of Conduct
+```powershell
+# Windows desktop application
+dotnet run --project .\Nickvision.Parabolic.WinUI
 
-This project follows the [**GNOME Code of Conduct**](https://conduct.gnome.org/).
+# Firefox Native Messaging host
+dotnet publish .\Nickvision.Parabolic.NativeHost -c Release -r win-x64
+```
 
-We expect all participants to treat each other with respect and contribute to a welcoming and inclusive community.
+The GitHub Actions workflows are the recommended release path because they also package dependencies, validate the Native Messaging protocol and create installers or bundles for each architecture.
+
+## 🤝 Contributing
+
+Bug reports and pull requests are welcome. Please include the operating system, architecture, Parabolic version, add-on version and the first relevant error from the workflow or application log.
+
+Translations continue to be managed by the upstream project on [Weblate](https://hosted.weblate.org/projects/nickvision-tube-converter/).
+
+## 🙏 Credits
+
+- [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic) and its contributors for the original application.
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp), FFmpeg, aria2 and Deno.
+- Firefox Native Messaging adaptation and release integration maintained in this fork by Othman Benbrahim.
+
+Parabolic is distributed under the licenses included in this repository and follows the [GNOME Code of Conduct](https://conduct.gnome.org/).
