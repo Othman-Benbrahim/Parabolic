@@ -67,6 +67,26 @@ app_module = next(
 architectures = app_module.get("build-options", {}).get("arch", {})
 require({"x86_64", "aarch64"}.issubset(architectures), "x86_64/aarch64 build options are required")
 
+ffmpeg_module = next(
+    (
+        module
+        for module in manifest.get("modules", [])
+        if isinstance(module, dict) and module.get("name") == "ffmpeg"
+    ),
+    {},
+)
+ffmpeg_sources = ffmpeg_module.get("sources", [])
+ffmpeg_arches = {
+    arch
+    for source in ffmpeg_sources
+    for arch in source.get("only-arches", [])
+}
+require(ffmpeg_arches == {"x86_64", "aarch64"}, "FFmpeg archives are required for both architectures")
+require(
+    all(len(source.get("sha256", "")) == 64 for source in ffmpeg_sources),
+    "every FFmpeg archive must have a SHA-256 digest",
+)
+
 print(
     f"Flatpak inputs OK: GNOME {runtime_version} runtime with GNOME 49 builder, "
     f"{len(destinations)} NuGet files, {len(python_urls)} Python sources"

@@ -63,6 +63,9 @@ checks both versions independently, the .NET 10 SDK extension, the x86_64 and
 aarch64 runtime mappings, and duplicate offline NuGet/Python sources. The builder then produces
 `org.nickvision.tubeconverter.flatpak` for both architectures.
 
+The FFmpeg archives are pinned to a release that is available for both Linux
+architectures, with SHA-256 values verified against the downloaded files.
+
 If the validation step succeeds but the builder fails, capture the first error
 inside the `flatpak-builder` step rather than the later cancelled matrix job.
 
