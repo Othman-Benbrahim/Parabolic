@@ -36,7 +36,8 @@ No detected URL or browsing data is sent to a remote service by the add-on. URLs
 | `media-overlay.js` | Selects the primary visible video and renders the isolated in-player interface. |
 | `popup.html`, `popup.css`, `popup.js` | Secondary diagnostics and detected-source interface. |
 | `options.html`, `options.css`, `options.js` | Overlay, quality, detection and compatibility preferences. |
-| `NATIVE-MESSAGING-PROTOCOL.md` | Contract that the Windows host must implement in the next phase. |
+| `NATIVE-MESSAGING-PROTOCOL.md` | Versioned contract implemented by the Windows native host. |
+| `../../Nickvision.Parabolic.NativeHost/` | Windows stdio host that connects Firefox to Parabolic services. |
 | `build-addon.ps1` | Packages the development add-on on Windows. |
 
 `utils.js` and the `icons/` directory remain required.
@@ -49,7 +50,7 @@ The control follows scrolling, page mutations and responsive resizing. It can be
 
 YouTube videos use a `blob:` source through Media Source Extensions. The overlay therefore sends the stable page URL, not the temporary blob URL. The background detector still recognizes `googlevideo.com/videoplayback` traffic for diagnostics.
 
-## Native bridge boundary
+## Native bridge implementation
 
 The add-on requests the native application name:
 
@@ -57,7 +58,11 @@ The add-on requests the native application name:
 com.nickvision.parabolic
 ```
 
-The current upstream Parabolic release does not install this host. Until the adapted desktop release exists:
+The adapted desktop source now contains `Nickvision.Parabolic.NativeHost`. It performs discovery with yt-dlp, returns a concise format list, starts downloads with Parabolic's configured output settings, relays progress, accepts cancellation, and can reveal a completed file in Explorer.
+
+The Windows installer publishes the host beside Parabolic, writes its absolute-path JSON manifest, and registers `com.nickvision.parabolic` for both 32-bit and 64-bit Firefox registry views. The host does not activate the WinUI window during the normal flow.
+
+The current public upstream Parabolic release does not install this host. Until a Windows build from this adapted source is installed:
 
 - the button and menus can be tested;
 - native status reports `App update required`;
@@ -65,6 +70,8 @@ The current upstream Parabolic release does not install this host. Until the ada
 - `Open installed Parabolic (compatibility mode)` still uses `parabolic://` explicitly.
 
 Automatic fallback is disabled by default because it changes focus away from Firefox. It can be enabled in settings for temporary testing.
+
+Firefox owns the native connection. Downloads continue while that connection and Firefox remain open; closing Firefox stops work owned by that host process. Moving downloads into a separately persistent broker is a possible future lifecycle improvement, but is not required for the first integrated release.
 
 ## Privacy and security
 

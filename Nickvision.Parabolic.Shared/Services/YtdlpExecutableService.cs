@@ -459,6 +459,10 @@ public class YtdlpExecutableService : DependencyExecutableService, IYtdlpExecuta
                 formatString = audioSelector;
             }
         }
+        if (!string.IsNullOrWhiteSpace(downloadOptions.FormatSelector))
+        {
+            formatString = downloadOptions.FormatSelector;
+        }
         if (!string.IsNullOrEmpty(formatString))
         {
             if (formatString.Contains('+'))

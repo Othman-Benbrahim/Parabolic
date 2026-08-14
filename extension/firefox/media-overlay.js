@@ -23,6 +23,8 @@
   let mainButton = null;
   let menuButton = null;
   let toast = null;
+  let toastMessage = null;
+  let toastActions = null;
   let bridgeIndicator = null;
   let exactFormatsContainer = null;
   let positionFrame = null;
@@ -171,6 +173,20 @@
       font-size: 11px;
       font-weight: 650;
     }
+    .toast-message { display: block; }
+    .toast-actions { display: flex; gap: 6px; margin-top: 7px; }
+    .toast-actions:empty { display: none; }
+    .toast-action {
+      padding: 5px 7px;
+      border: 1px solid rgba(255, 255, 255, .45);
+      border-radius: 6px;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 750;
+    }
+    .toast-action:hover { background: rgba(255, 255, 255, .14); }
     .toast.above { top: auto; bottom: calc(100% + 8px); }
     .toast[data-kind="error"] { background: #9e2228; }
     .toast[data-kind="success"] { background: #237a43; }
@@ -248,12 +264,19 @@
     }
   }
 
-  function showToast(message, kind = "info", persistent = false) {
+  function showToast(message, kind = "info", persistent = false, action = "") {
     if (!toast) {
       return;
     }
     clearTimeout(hideToastTimer);
-    toast.textContent = message;
+    toastMessage.textContent = message;
+    toastActions.replaceChildren();
+    if (action === "cancel" && currentDownloadId) {
+      toastActions.append(createToastAction("Cancel", cancelCurrentDownload));
+    }
+    if (action === "open-folder" && currentDownloadId) {
+      toastActions.append(createToastAction("Open folder", openCurrentDownloadFolder));
+    }
     toast.dataset.kind = kind;
     toast.hidden = false;
     toast.classList.toggle("above", shouldOpenAbove());
@@ -261,6 +284,44 @@
       hideToastTimer = setTimeout(() => {
         toast.hidden = true;
       }, kind === "error" ? 7000 : 4000);
+    }
+  }
+
+  function createToastAction(label, handler) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "toast-action";
+    button.textContent = label;
+    button.addEventListener("click", handler);
+    return button;
+  }
+
+  async function cancelCurrentDownload() {
+    if (!currentDownloadId) {
+      return;
+    }
+    showToast("Cancelling download…", "info", true);
+    const response = await browser.runtime.sendMessage({
+      type: "native-cancel",
+      downloadId: currentDownloadId
+    });
+    if (!response?.ok) {
+      showToast(response?.error?.message || "Unable to cancel the download.", "error", true, "cancel");
+    }
+  }
+
+  async function openCurrentDownloadFolder() {
+    if (!currentDownloadId) {
+      return;
+    }
+    const response = await browser.runtime.sendMessage({
+      type: "native-open-folder",
+      downloadId: currentDownloadId
+    });
+    if (!response?.ok) {
+      showToast(response?.error?.message || "Unable to open the download folder.", "error", true, "open-folder");
+    } else {
+      toast.hidden = true;
     }
   }
 
@@ -284,9 +345,10 @@
       if (response.mode === "legacy") {
         showToast(response.warning || "Opened Parabolic in compatibility mode.", "info");
       } else {
-        showToast("Download started. You can keep watching.", "success");
+        showToast("Download started. You can keep watching.", "success", true, "cancel");
       }
     } catch (error) {
+      currentDownloadId = null;
       showToast(
         error.message || "Install the upcoming Parabolic release to enable background downloads.",
         "error",
@@ -476,6 +538,11 @@
     toast.className = "toast";
     toast.setAttribute("role", "status");
     toast.hidden = true;
+    toastMessage = document.createElement("span");
+    toastMessage.className = "toast-message";
+    toastActions = document.createElement("div");
+    toastActions.className = "toast-actions";
+    toast.append(toastMessage, toastActions);
     group.append(mainButton, menuButton);
     shell.append(group, menu, toast);
     shadow.append(style, shell);
@@ -567,12 +634,20 @@
       if (currentDownloadId && event.downloadId && event.downloadId !== currentDownloadId) {
         return;
       }
-      if (event.status === "downloading") {
+      if (event.downloadId && !currentDownloadId) {
+        currentDownloadId = event.downloadId;
+      }
+      if (event.status === "analyzing") {
+        showToast("Analyzing available media…", "info", true);
+      } else if (event.status === "queued") {
+        showToast("Download queued…", "info", true, "cancel");
+      } else if (event.status === "downloading") {
         const percent = Number.isFinite(event.progress) ? ` ${Math.round(event.progress)}%` : "";
-        showToast(`Downloading…${percent}`, "info", true);
+        showToast(`Downloading…${percent}`, "info", true, "cancel");
+      } else if (event.status === "merging") {
+        showToast("Merging video and audio…", "info", true, "cancel");
       } else if (event.status === "completed") {
-        showToast("Download complete.", "success");
-        currentDownloadId = null;
+        showToast("Download complete.", "success", true, "open-folder");
       } else if (event.status === "failed") {
         showToast(event.message || "The download failed.", "error", true);
         currentDownloadId = null;

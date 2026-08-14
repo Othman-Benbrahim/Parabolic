@@ -5,11 +5,13 @@ on:
     branches: [ "main" ]
     paths:
       - "extension/firefox/**"
+      - "tests/firefox/**"
       - ".github/workflows/firefox.yml"
   pull_request:
     branches: [ "main" ]
     paths:
       - "extension/firefox/**"
+      - "tests/firefox/**"
       - ".github/workflows/firefox.yml"
   workflow_dispatch:
 

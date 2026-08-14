@@ -4,7 +4,7 @@
 #define MyAppName            "Nickvision Parabolic"
 #define MyAppShortName       "Parabolic"
 #define MyAppShortNameLower  "parabolic"
-#define MyAppVersion         "2026.5.0"
+#define MyAppVersion         "2026.8.0"
 #define MyAppPublisher       "Nickvision"
 #define MyAppURL             "https://nickvision.org"
 #define MyAppExeName         "Nickvision.Parabolic.WinUI.exe"
@@ -87,6 +87,7 @@ Source: "ffprobe.exe"; DestDir: "{app}\Release"; Flags: ignoreversion
 Source: "deno.exe"; DestDir: "{app}\Release"; Flags: ignoreversion
 Source: "..\{#GetEnv('APP_FILES_PATH')}\{#MyAppExeName}"; DestDir: "{app}\Release"; Flags: ignoreversion
 Source: "..\{#GetEnv('APP_FILES_PATH')}\*"; DestDir: "{app}\Release"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\{#GetEnv('NATIVE_HOST_FILES_PATH')}\*"; DestDir: "{app}\Release"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppShortName}"; Filename: "{app}\Release\{#MyAppExeName}"; Tasks: quicklaunchicon
@@ -97,6 +98,39 @@ Root: HKCR; Subkey: {#MyAppShortNameLower}; ValueType: "string"; ValueData: "URL
 Root: HKCR; Subkey: {#MyAppShortNameLower}; ValueType: "string"; ValueName: "URL Protocol"; ValueData: ""
 Root: HKCR; Subkey: "{#MyAppShortNameLower}\DefaultIcon"; ValueType: "string"; ValueData: "{app}\Release\{#MyAppExeName},0"
 Root: HKCR; Subkey: "{#MyAppShortNameLower}\shell\open\command"; ValueType: "string"; ValueData: """{app}\Release\{#MyAppExeName}"" ""%1"""
+Root: HKLM; Subkey: "Software\Mozilla\NativeMessagingHosts\com.nickvision.parabolic"; ValueType: "string"; ValueData: "{app}\Release\com.nickvision.parabolic.json"; Flags: uninsdeletekey 64bit
+Root: HKLM; Subkey: "Software\Mozilla\NativeMessagingHosts\com.nickvision.parabolic"; ValueType: "string"; ValueData: "{app}\Release\com.nickvision.parabolic.json"; Flags: uninsdeletekey 32bit
 
 [Run]
 Filename: "{app}\Release\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent unchecked
+
+[Code]
+procedure WriteFirefoxNativeHostManifest;
+var
+  HostPath: String;
+  EscapedHostPath: String;
+  Manifest: String;
+begin
+  HostPath := ExpandConstant('{app}\Release\Nickvision.Parabolic.NativeHost.exe');
+  EscapedHostPath := HostPath;
+  StringChangeEx(EscapedHostPath, '\', '\\', True);
+  Manifest := '{' + #13#10 +
+    '  "name": "com.nickvision.parabolic",' + #13#10 +
+    '  "description": "Parabolic Firefox Native Messaging bridge",' + #13#10 +
+    '  "path": "' + EscapedHostPath + '",' + #13#10 +
+    '  "type": "stdio",' + #13#10 +
+    '  "allowed_extensions": ["parabolic-media-detector@othmanbenbrahim.dev"]' + #13#10 +
+    '}' + #13#10;
+  if not SaveStringToFile(ExpandConstant('{app}\Release\com.nickvision.parabolic.json'), Manifest, False) then
+  begin
+    RaiseException('Unable to create the Firefox Native Messaging host manifest.');
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    WriteFirefoxNativeHostManifest;
+  end;
+end;

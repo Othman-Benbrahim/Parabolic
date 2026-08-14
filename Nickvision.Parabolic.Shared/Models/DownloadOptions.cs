@@ -25,6 +25,7 @@ public class DownloadOptions
     public TimeFrame? TimeFrame { get; set; }
     public VideoResolution? VideoResolution { get; set; }
     public double? AudioBitrate { get; set; }
+    public string FormatSelector { get; set; }
 
     public DownloadOptions(Uri url)
     {
@@ -45,6 +46,7 @@ public class DownloadOptions
         TimeFrame = null;
         VideoResolution = null;
         AudioBitrate = null;
+        FormatSelector = string.Empty;
     }
 
     public string SaveFolder

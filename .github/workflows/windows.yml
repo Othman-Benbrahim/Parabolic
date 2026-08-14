@@ -11,6 +11,7 @@ permissions:
   contents: read
 env:
   PROJECT_NAME: Nickvision.Parabolic.WinUI
+  NATIVE_HOST_PROJECT: Nickvision.Parabolic.NativeHost
   INSTALLER_NAME: NickvisionParabolicSetup
   SHORT_NAME: Parabolic
 jobs:
@@ -56,16 +57,23 @@ jobs:
           Import-Module "$vsInstallPath\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
           Enter-VsDevShell -VsInstallPath $vsInstallPath -SkipAutomaticLocation
           dotnet restore ${{ env.PROJECT_NAME }} --runtime win-${{ matrix.variant.arch }} /p:PublishReadyToRun=true
+          dotnet restore ${{ env.NATIVE_HOST_PROJECT }} --runtime win-${{ matrix.variant.arch }}
       - name: "Publish"
         run: |
           $vsInstallPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
           Import-Module "$vsInstallPath\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
           Enter-VsDevShell -VsInstallPath $vsInstallPath -SkipAutomaticLocation
           dotnet publish ${{ env.PROJECT_NAME }} -c Release --no-restore --runtime win-${{ matrix.variant.arch }} /p:Platform=${{ matrix.variant.arch }}
+          dotnet publish ${{ env.NATIVE_HOST_PROJECT }} -c Release --no-restore --runtime win-${{ matrix.variant.arch }}
+      - name: "Test Native Messaging Host"
+        shell: pwsh
+        run: |
+          ./tests/windows/test-native-host.ps1 -HostPath "${{ env.NATIVE_HOST_PROJECT }}/bin/Release/net10.0-windows10.0.19041.0/win-${{ matrix.variant.arch }}/publish/${{ env.NATIVE_HOST_PROJECT }}.exe"
       - name: "Installer"
         working-directory: ${{github.workspace}}/inno
         env:
           APP_FILES_PATH: ${{ env.PROJECT_NAME }}/bin/${{ matrix.variant.arch }}/Release/net10.0-windows10.0.19041.0/win-${{ matrix.variant.arch }}/publish
+          NATIVE_HOST_FILES_PATH: ${{ env.NATIVE_HOST_PROJECT }}/bin/Release/net10.0-windows10.0.19041.0/win-${{ matrix.variant.arch }}/publish
         shell: pwsh
         run: |
           $ProgressPreference = 'SilentlyContinue'
@@ -86,10 +94,12 @@ jobs:
         shell: pwsh
         run: |
           $publishDir = "${{ env.PROJECT_NAME }}\bin\${{ matrix.variant.arch }}\Release\net10.0-windows10.0.19041.0\win-${{ matrix.variant.arch }}\publish"
+          $nativeHostPublishDir = "${{ env.NATIVE_HOST_PROJECT }}\bin\Release\net10.0-windows10.0.19041.0\win-${{ matrix.variant.arch }}\publish"
           $portableDir = "${{ github.workspace }}\portable"
           $innoDir = "${{ github.workspace }}\inno"
           New-Item -ItemType Directory -Force -Path "$portableDir\Release" | Out-Null
           Copy-Item -Path "$publishDir\*" -Destination "$portableDir\Release" -Recurse
+          Copy-Item -Path "$nativeHostPublishDir\*" -Destination "$portableDir\Release" -Recurse -Force
           $batContent = "@echo off`r`n`"%~dp0Release\${{ env.PROJECT_NAME }}.exe`" --portable"
           Set-Content -Path "$portableDir\${{ env.SHORT_NAME }}.bat" -Value $batContent -NoNewline
           move $innoDir\yt-dlp.exe $portableDir\Release\yt-dlp.exe

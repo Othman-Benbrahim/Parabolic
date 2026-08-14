@@ -18,8 +18,12 @@ public static class HostApplicationBuilderExtensions
         {
             var appInfo = new AppInfo("org.nickvision.tubeconverter", "Nickvision Parabolic", "Parabolic")
             {
-                Version = new AppVersion("2026.5.0"),
+                Version = new AppVersion("2026.8.0"),
                 Changelog = """
+                - Added the Firefox Native Messaging bridge
+                - Added background downloads started directly from a video player
+                - Added Firefox format discovery, progress, cancellation, and open-folder commands
+                - Added automatic native host registration to the Windows installer
                 - Improved time frame downloads to cut with ffmpeg instead of using yt-dlp's broken --download-sections option
                 - Fixed an issue where some playlists throw a requested format not available error
                 - Fixed an issue where the macOS configuration directory was incorrect

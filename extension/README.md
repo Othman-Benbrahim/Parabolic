@@ -3,7 +3,7 @@
 # Features
 - **In-Player Download Button (Firefox)**: The primary download control appears automatically over the active video, so the toolbar popup is not required.
 - **One-Click Download Presets (Firefox)**: Download the best quality, cap video at 1080p/720p/480p, or extract audio from the page itself.
-- **Native Background Downloads (Firefox)**: The add-on protocol is ready to start downloads and receive progress without switching away from Firefox once the adapted desktop release is installed.
+- **Native Background Downloads (Firefox)**: The adapted Windows build starts downloads and returns progress through Native Messaging without switching away from Firefox.
 - **Context Menu Integration**: Right-click and select: `Open link in Parabolic` on any specific link to send that exact URL without needing to open the page. Otherwise, use the current tab's URL.
 - **Keyboard shortcut**: Press `Alt` + `P` to send the URL of your active tab to Parabolic.
 - **Lightweight & Fast**: Designed to be fast, unobtrusive, easy to use, and respects your privacy.

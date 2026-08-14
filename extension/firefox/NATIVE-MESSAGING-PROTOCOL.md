@@ -83,7 +83,7 @@ Response payload:
 
 ```json
 {
-  "appVersion": "2026.9.0",
+    "appVersion": "2026.8.0",
   "protocolVersion": 1,
   "capabilities": ["formats", "download", "progress", "cancel", "open-folder"]
 }
@@ -198,6 +198,8 @@ Request payload:
 
 The host opens the containing folder only for a download ID it created. It must not accept an arbitrary filesystem path from the extension.
 
-## Lifecycle requirement on Windows
+## Windows lifecycle
 
-The host process communicates with Firefox over standard input and output. It may forward work to the already running Parabolic process through a named pipe. If it starts a long-lived child process, the implementation must account for Firefox terminating the Native Messaging job when the port closes. The preferred design is a small host bridge plus a separately installed Parabolic background process or the existing application instance.
+The first implementation is a dedicated host process that resolves Parabolic's existing configuration, discovery and download services directly. Firefox starts it over standard input/output and keeps one port open for commands and events. The WinUI application does not have to be open and is not activated.
+
+The host cancels its remaining downloads when Firefox closes the port. A later implementation may move active downloads to a separately persistent broker if downloads must survive a complete Firefox shutdown.

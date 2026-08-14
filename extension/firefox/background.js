@@ -429,7 +429,9 @@ function normalizedDownloadPayload(message, sender) {
 async function requestNativeDownload(message, sender) {
   const payload = normalizedDownloadPayload(message, sender);
   try {
-    const response = await nativeBridge.request("download", payload, 20000);
+    // yt-dlp has to inspect the page before the host can enqueue the download.
+    // Some extractors legitimately take longer than a normal extension request.
+    const response = await nativeBridge.request("download", payload, 120000);
     const downloadId = response.payload?.downloadId || response.downloadId;
     if (downloadId && Number.isInteger(payload.tabId)) {
       downloadTabs.set(downloadId, payload.tabId);
@@ -461,7 +463,7 @@ async function requestNativeDownload(message, sender) {
 async function requestNativeFormats(message, sender) {
   const payload = normalizedDownloadPayload(message, sender);
   try {
-    const response = await nativeBridge.request("get-formats", payload, 30000);
+    const response = await nativeBridge.request("get-formats", payload, 120000);
     return { ok: true, result: response.payload || response };
   } catch (error) {
     return {
@@ -631,6 +633,17 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       return { ok: true, result: response.payload || response };
     } catch (error) {
       return { ok: false, error: serializableError(error, "Unable to cancel the download.") };
+    }
+  }
+
+  if (message.type === "native-open-folder") {
+    try {
+      const response = await nativeBridge.request("open-folder", {
+        downloadId: message.downloadId
+      });
+      return { ok: true, result: response.payload || response };
+    } catch (error) {
+      return { ok: false, error: serializableError(error, "Unable to open the download folder.") };
     }
   }
 

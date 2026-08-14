@@ -145,6 +145,16 @@ async function send(message, sender = {}) {
   assert.equal(request.payload.preset, "720");
   assert.equal(request.payload.formatId, "22");
 
+  const cancel = await send({ type: "native-cancel", downloadId: "download-test" }, sender);
+  assert.equal(cancel.ok, true);
+  assert(nativeRequests.some((item) => item.type === "cancel"
+    && item.payload.downloadId === "download-test"));
+
+  const openFolder = await send({ type: "native-open-folder", downloadId: "download-test" }, sender);
+  assert.equal(openFolder.ok, true);
+  assert(nativeRequests.some((item) => item.type === "open-folder"
+    && item.payload.downloadId === "download-test"));
+
   for (const listener of nativeMessageListeners) {
     listener({
       protocolVersion: 1,
