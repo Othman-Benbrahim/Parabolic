@@ -98,8 +98,8 @@ Root: HKCR; Subkey: {#MyAppShortNameLower}; ValueType: "string"; ValueData: "URL
 Root: HKCR; Subkey: {#MyAppShortNameLower}; ValueType: "string"; ValueName: "URL Protocol"; ValueData: ""
 Root: HKCR; Subkey: "{#MyAppShortNameLower}\DefaultIcon"; ValueType: "string"; ValueData: "{app}\Release\{#MyAppExeName},0"
 Root: HKCR; Subkey: "{#MyAppShortNameLower}\shell\open\command"; ValueType: "string"; ValueData: """{app}\Release\{#MyAppExeName}"" ""%1"""
-Root: HKLM; Subkey: "Software\Mozilla\NativeMessagingHosts\com.nickvision.parabolic"; ValueType: "string"; ValueData: "{app}\Release\com.nickvision.parabolic.json"; Flags: uninsdeletekey 64bit
-Root: HKLM; Subkey: "Software\Mozilla\NativeMessagingHosts\com.nickvision.parabolic"; ValueType: "string"; ValueData: "{app}\Release\com.nickvision.parabolic.json"; Flags: uninsdeletekey 32bit
+Root: HKLM64; Subkey: "Software\Mozilla\NativeMessagingHosts\com.nickvision.parabolic"; ValueType: "string"; ValueData: "{app}\Release\com.nickvision.parabolic.json"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Mozilla\NativeMessagingHosts\com.nickvision.parabolic"; ValueType: "string"; ValueData: "{app}\Release\com.nickvision.parabolic.json"; Flags: uninsdeletekey
 
 [Run]
 Filename: "{app}\Release\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent unchecked
