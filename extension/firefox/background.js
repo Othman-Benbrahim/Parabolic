@@ -2,9 +2,16 @@ const DEFAULT_SETTINGS = {
   trimPlaylist: false,
   showContextMenu: true,
   detectMedia: true,
-  showMediaBadge: true
+  showMediaBadge: true,
+  showOverlay: true,
+  quickDownloadPreset: "best",
+  overlayPosition: "top-right",
+  fallbackToProtocol: false
 };
 
+const NATIVE_HOST_NAME = "com.nickvision.parabolic";
+const NATIVE_PROTOCOL_VERSION = 1;
+const NATIVE_REQUEST_TIMEOUT = 8000;
 const MAX_MEDIA_PER_TAB = 60;
 const MEDIA_EXTENSIONS = new Set([
   "mp4", "webm", "mov", "m4v", "mkv", "avi",
@@ -17,9 +24,151 @@ const HLS_MIME_TYPES = new Set([
   "audio/mpegurl",
   "audio/x-mpegurl"
 ]);
+const DOWNLOAD_PRESETS = new Set(["best", "1080", "720", "480", "audio"]);
 
 const mediaByTab = new Map();
+const downloadTabs = new Map();
 let settings = { ...DEFAULT_SETTINGS };
+
+function requestId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function serializableError(error, fallback) {
+  return {
+    code: error?.code || "PARABOLIC_BRIDGE_ERROR",
+    message: error?.message || fallback
+  };
+}
+
+class NativeBridge {
+  constructor() {
+    this.port = null;
+    this.pending = new Map();
+  }
+
+  connect() {
+    if (this.port) {
+      return this.port;
+    }
+
+    const port = browser.runtime.connectNative(NATIVE_HOST_NAME);
+    this.port = port;
+    port.onMessage.addListener((message) => this.onMessage(message));
+    port.onDisconnect.addListener(() => this.onDisconnect(port));
+    return port;
+  }
+
+  onMessage(message) {
+    if (!message || typeof message !== "object") {
+      return;
+    }
+
+    if (message.type === "event") {
+      this.forwardEvent(message).catch(console.error);
+      return;
+    }
+
+    const correlationId = message.replyTo || message.requestId;
+    const pending = this.pending.get(correlationId);
+    if (!pending) {
+      return;
+    }
+
+    clearTimeout(pending.timeout);
+    this.pending.delete(correlationId);
+    if (message.ok === false) {
+      const error = new Error(message.error?.message || "Parabolic rejected the request.");
+      error.code = message.error?.code || "PARABOLIC_REQUEST_REJECTED";
+      pending.reject(error);
+      return;
+    }
+    pending.resolve(message);
+  }
+
+  async forwardEvent(message) {
+    const payload = message.payload || {};
+    const tabId = Number(payload.tabId ?? downloadTabs.get(payload.downloadId));
+    if (Number.isInteger(tabId) && tabId >= 0) {
+      await browser.tabs.sendMessage(tabId, {
+        type: "parabolic-native-event",
+        event: payload
+      }).catch(() => undefined);
+    }
+
+    if (payload.downloadId && Number.isInteger(tabId)) {
+      downloadTabs.set(payload.downloadId, tabId);
+    }
+    if (["completed", "failed", "cancelled"].includes(payload.status)) {
+      downloadTabs.delete(payload.downloadId);
+    }
+    if (payload.status === "completed") {
+      await browser.notifications.create(`parabolic-${payload.downloadId || Date.now()}`, {
+        type: "basic",
+        iconUrl: browser.runtime.getURL("icons/icon128.png"),
+        title: "Parabolic download complete",
+        message: payload.filename || "Your media is ready."
+      }).catch(() => undefined);
+    }
+  }
+
+  onDisconnect(port) {
+    if (this.port !== port) {
+      return;
+    }
+    this.port = null;
+    const message = browser.runtime.lastError?.message
+      || "The Parabolic native bridge is not installed or stopped responding.";
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timeout);
+      const error = new Error(message);
+      error.code = "PARABOLIC_BRIDGE_UNAVAILABLE";
+      pending.reject(error);
+    }
+    this.pending.clear();
+  }
+
+  request(type, payload = {}, timeoutMilliseconds = NATIVE_REQUEST_TIMEOUT) {
+    const id = requestId();
+    return new Promise((resolve, reject) => {
+      let port;
+      try {
+        port = this.connect();
+      } catch (error) {
+        error.code = error.code || "PARABOLIC_BRIDGE_UNAVAILABLE";
+        reject(error);
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        const error = new Error("Parabolic did not answer in time.");
+        error.code = "PARABOLIC_BRIDGE_TIMEOUT";
+        reject(error);
+      }, timeoutMilliseconds);
+      this.pending.set(id, { resolve, reject, timeout });
+
+      try {
+        port.postMessage({
+          protocolVersion: NATIVE_PROTOCOL_VERSION,
+          requestId: id,
+          type,
+          payload
+        });
+      } catch (error) {
+        clearTimeout(timeout);
+        this.pending.delete(id);
+        error.code = error.code || "PARABOLIC_BRIDGE_UNAVAILABLE";
+        reject(error);
+      }
+    });
+  }
+}
+
+const nativeBridge = new NativeBridge();
 
 function isHttpUrl(value) {
   try {
@@ -198,6 +347,10 @@ function addMedia(tabId, candidate) {
 
   mediaByTab.set(tabId, tabMedia);
   updateBadge(tabId);
+  browser.tabs.sendMessage(tabId, {
+    type: "parabolic-media-catalog-updated",
+    count: tabMedia.size
+  }).catch(() => undefined);
 }
 
 async function updateBadge(tabId) {
@@ -212,7 +365,7 @@ async function updateBadge(tabId) {
       tabId,
       title: count > 0
         ? `${count} media source${count === 1 ? "" : "s"} detected`
-        : "Open in Parabolic"
+        : "Parabolic downloads and diagnostics"
     });
   } catch (_) {
     // The tab may have been closed between detection and badge refresh.
@@ -243,6 +396,105 @@ async function openParabolicUrl(url, tabId) {
   }
 }
 
+function normalizedDownloadPayload(message, sender) {
+  const source = message.request || {};
+  const pageUrl = isHttpUrl(sender.tab?.url) ? sender.tab.url : source.pageUrl;
+  const mediaUrl = isHttpUrl(source.mediaUrl) ? source.mediaUrl : "";
+  if (!isHttpUrl(pageUrl) && !mediaUrl) {
+    throw new Error("No downloadable page or media URL was provided.");
+  }
+
+  let processedPageUrl = pageUrl;
+  if (settings.trimPlaylist && isHttpUrl(pageUrl)) {
+    processedPageUrl = trimPlaylistFromUrl(pageUrl);
+  }
+  const fallbackPreset = DOWNLOAD_PRESETS.has(settings.quickDownloadPreset)
+    ? settings.quickDownloadPreset
+    : "best";
+  const preset = DOWNLOAD_PRESETS.has(source.preset)
+    ? source.preset
+    : fallbackPreset;
+  return {
+    tabId: sender.tab?.id ?? Number(message.tabId),
+    pageUrl: processedPageUrl,
+    mediaUrl,
+    title: String(source.title || sender.tab?.title || "Media").slice(0, 500),
+    preset,
+    formatId: String(source.formatId || "").slice(0, 200),
+    sourceKind: String(source.sourceKind || "page").slice(0, 40),
+    frameUrl: isHttpUrl(source.frameUrl) ? source.frameUrl : ""
+  };
+}
+
+async function requestNativeDownload(message, sender) {
+  const payload = normalizedDownloadPayload(message, sender);
+  try {
+    const response = await nativeBridge.request("download", payload, 20000);
+    const downloadId = response.payload?.downloadId || response.downloadId;
+    if (downloadId && Number.isInteger(payload.tabId)) {
+      downloadTabs.set(downloadId, payload.tabId);
+    }
+    return {
+      ok: true,
+      mode: "native",
+      result: response.payload || response
+    };
+  } catch (error) {
+    if (message.allowLegacy === true || settings.fallbackToProtocol) {
+      await openParabolicUrl(payload.pageUrl || payload.mediaUrl, payload.tabId);
+      return {
+        ok: true,
+        mode: "legacy",
+        warning: "The native bridge is unavailable, so Parabolic was opened in compatibility mode."
+      };
+    }
+    return {
+      ok: false,
+      error: serializableError(
+        error,
+        "Install the upcoming Parabolic release to enable background downloads."
+      )
+    };
+  }
+}
+
+async function requestNativeFormats(message, sender) {
+  const payload = normalizedDownloadPayload(message, sender);
+  try {
+    const response = await nativeBridge.request("get-formats", payload, 30000);
+    return { ok: true, result: response.payload || response };
+  } catch (error) {
+    return {
+      ok: false,
+      error: serializableError(error, "Unable to retrieve formats from Parabolic.")
+    };
+  }
+}
+
+async function probeNativeBridge() {
+  try {
+    const response = await nativeBridge.request("hello", {
+      extensionId: browser.runtime.id,
+      extensionVersion: browser.runtime.getManifest().version,
+      protocolVersion: NATIVE_PROTOCOL_VERSION
+    }, 3000);
+    return {
+      ok: true,
+      available: true,
+      host: response.payload || response
+    };
+  } catch (error) {
+    return {
+      ok: true,
+      available: false,
+      error: serializableError(
+        error,
+        "The installed Parabolic version does not include the Firefox bridge yet."
+      )
+    };
+  }
+}
+
 async function createContextMenu() {
   try {
     await browser.contextMenus.remove("openParabolicLink");
@@ -252,7 +504,7 @@ async function createContextMenu() {
   if (settings.showContextMenu) {
     browser.contextMenus.create({
       id: "openParabolicLink",
-      title: "Open link in Parabolic",
+      title: "Download link with Parabolic",
       contexts: ["link", "page", "video", "audio"]
     });
   }
@@ -302,6 +554,11 @@ browser.storage.onChanged.addListener(async (changes, namespace) => {
   if (changes.detectMedia || changes.showMediaBadge) {
     await refreshAllBadges();
   }
+  const tabs = await browser.tabs.query({});
+  await Promise.all(tabs.map((tab) => browser.tabs.sendMessage(tab.id, {
+    type: "parabolic-settings-updated",
+    settings
+  }).catch(() => undefined)));
 });
 
 browser.webRequest.onHeadersReceived.addListener(
@@ -337,10 +594,14 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
   }
 
   if (message.type === "get-media") {
-    const tabId = Number(message.tabId);
+    const tabId = Number(message.tabId ?? sender.tab?.id);
     const candidates = [...(mediaByTab.get(tabId)?.values() || [])]
       .sort((left, right) => right.discoveredAt - left.discoveredAt);
     return { candidates, settings };
+  }
+
+  if (message.type === "get-settings") {
+    return { ok: true, settings };
   }
 
   if (message.type === "clear-media") {
@@ -350,27 +611,67 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     return { ok: true };
   }
 
-  if (message.type === "open-parabolic") {
-    await openParabolicUrl(message.url, Number(message.tabId));
-    return { ok: true };
+  if (message.type === "bridge-status") {
+    return probeNativeBridge();
+  }
+
+  if (message.type === "native-download") {
+    return requestNativeDownload(message, sender);
+  }
+
+  if (message.type === "native-formats") {
+    return requestNativeFormats(message, sender);
+  }
+
+  if (message.type === "native-cancel") {
+    try {
+      const response = await nativeBridge.request("cancel", {
+        downloadId: message.downloadId
+      });
+      return { ok: true, result: response.payload || response };
+    } catch (error) {
+      return { ok: false, error: serializableError(error, "Unable to cancel the download.") };
+    }
+  }
+
+  if (message.type === "legacy-open" || message.type === "open-parabolic") {
+    await openParabolicUrl(message.url, Number(message.tabId ?? sender.tab?.id));
+    return { ok: true, mode: "legacy" };
   }
 
   return undefined;
 });
 
-browser.contextMenus.onClicked.addListener((info, tab) => {
+browser.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== "openParabolicLink") {
     return;
   }
-  const urlToOpen = info.linkUrl || info.srcUrl || info.pageUrl || tab.url;
-  openParabolicUrl(urlToOpen, tab.id).catch(console.error);
+  const response = await requestNativeDownload({
+    request: {
+      pageUrl: info.pageUrl || tab.url,
+      mediaUrl: info.srcUrl || info.linkUrl || "",
+      preset: settings.quickDownloadPreset,
+      title: tab.title,
+      sourceKind: info.mediaType || "context-menu"
+    }
+  }, { tab });
+  if (!response.ok) {
+    console.error(response.error?.message);
+  }
 });
 
 browser.commands.onCommand.addListener(async (command) => {
   if (command === "open-parabolic-current-tab") {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (tab?.url) {
-      await openParabolicUrl(tab.url, tab.id);
+      await requestNativeDownload({
+        request: {
+          pageUrl: tab.url,
+          preset: settings.quickDownloadPreset,
+          title: tab.title,
+          sourceKind: "keyboard"
+        }
+      }, { tab });
     }
   }
   if (command === "open-parabolic-options") {

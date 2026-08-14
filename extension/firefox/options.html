@@ -2,177 +2,120 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Parabolic Settings</title>
   <link rel="shortcut icon" href="icons/favicon.ico" type="image/x-icon">
-  <style>
-    body {
-      padding: 12px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      margin: 0;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-    }
-    .container {
-      max-width: 500px;
-      padding: 10px;
-      width: 100%;
-      margin: 0;
-      border-radius: 10px;
-      margin-top: 20px;
-    }
-    h3 {
-      margin: 0 0 12px 0;
-      font-size: 16px;
-      font-weight: 600;
-    }
-    hr {
-      border: none;
-      border-top: 1px solid #ddd;
-      margin: 12px 0;
-    }
-    .setting {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 6px 0;
-    }
-    .setting label {
-      flex: 1;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .toggle {
-      position: relative;
-      width: 40px;
-      height: 22px;
-    }
-    .toggle input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-    .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: #ccc;
-      transition: 0.3s;
-      border-radius: 22px;
-    }
-    .slider:before {
-      position: absolute;
-      content: "";
-      height: 16px;
-      width: 16px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      transition: 0.3s;
-      border-radius: 50%;
-    }
-    input:checked + .slider {
-      background-color: #e63a3f;
-    }
-    input:checked + .slider:before {
-      transform: translateX(18px);
-    }
-    .description {
-      font-size: 12px;
-      color: #666;
-      margin-top: 4px;
-    }
-    @media (prefers-color-scheme: dark) {
-      body {
-        background-color: #202020;
-        color: #e6e6e6;
-      }
-      .container {
-        background-color: #272727;
-      }
-      h3 {
-        color: #fff;
-      }
-      hr {
-        border-top-color: #333;
-      }
-      .description {
-        color: #bdbdbd;
-      }
-      .slider {
-        background-color: #444;
-      }
-      .slider:before {
-        background-color: #f5f5f5;
-      }
-      input:checked + .slider {
-        background-color: #e63a3f;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="options.css">
 </head>
 <body>
-  <div class="container">
-  <h3>Parabolic Settings</h3>
-  <hr>
-  <div class="setting">
-    <label for="detectMedia">
-      <span>Detect media playing in Firefox</span>
-      <span class="toggle">
-        <input type="checkbox" id="detectMedia">
-        <span class="slider"></span>
-      </span>
-    </label>
-  </div>
-  <div class="description">
-    Detect HTML5 video, audio, HLS and DASH streams in pages and embedded players.
-  </div>
-  <hr>
-  <div class="setting">
-    <label for="showMediaBadge">
-      <span>Show the number of detected sources</span>
-      <span class="toggle">
-        <input type="checkbox" id="showMediaBadge">
-        <span class="slider"></span>
-      </span>
-    </label>
-  </div>
-  <div class="description">
-    Display a counter on the Parabolic toolbar icon when media sources are found.
-  </div>
-  <hr>
-  <div class="setting">
-      <label for="contextMenuToggle">
-        <span>Show 'Open link in Parabolic' context menu</span>
+  <main class="container">
+    <header>
+      <div>
+        <h1>Parabolic for Firefox</h1>
+        <p>In-player downloads and detection preferences</p>
+      </div>
+      <span id="savedState" class="saved-state" role="status"></span>
+    </header>
+
+    <section>
+      <h2>In-player button</h2>
+      <label class="setting toggle-setting" for="showOverlay">
+        <span>
+          <strong>Show the download button on videos</strong>
+          <small>The button appears automatically over the largest active video.</small>
+        </span>
         <span class="toggle">
-          <input type="checkbox" id="contextMenuToggle">
+          <input type="checkbox" id="showOverlay">
           <span class="slider"></span>
         </span>
       </label>
-    </div>
-  <div class="description">
-    Display the "Open link in Parabolic" option when right-clicking on a webpage or link.
-  </div>
-  <hr>
-  <div class="setting">
-    <label for="trimPlaylist">
-      <span>Trim playlist from URL</span>
-      <span class="toggle">
-        <input type="checkbox" id="trimPlaylist">
-        <span class="slider"></span>
-      </span>
-    </label>
-  </div>
-  <div class="description">
-    Remove playlist parameters (&amp;list=...) from YouTube URLs to download only the current video.
-  </div>
-</div>
+
+      <label class="setting" for="quickDownloadPreset">
+        <span>
+          <strong>One-click quality</strong>
+          <small>Used when you click the main half of the video button.</small>
+        </span>
+        <select id="quickDownloadPreset">
+          <option value="best">Best quality</option>
+          <option value="1080">Up to 1080p</option>
+          <option value="720">Up to 720p</option>
+          <option value="480">Up to 480p</option>
+          <option value="audio">Audio only</option>
+        </select>
+      </label>
+
+      <label class="setting" for="overlayPosition">
+        <span>
+          <strong>Button position</strong>
+          <small>Position relative to the detected video.</small>
+        </span>
+        <select id="overlayPosition">
+          <option value="top-right">Top right</option>
+          <option value="top-left">Top left</option>
+          <option value="bottom-right">Bottom right</option>
+          <option value="bottom-left">Bottom left</option>
+        </select>
+      </label>
+    </section>
+
+    <section>
+      <h2>Detection</h2>
+      <label class="setting toggle-setting" for="detectMedia">
+        <span>
+          <strong>Detect media playing in Firefox</strong>
+          <small>Detect HTML5 video, HLS, DASH and supported embedded players.</small>
+        </span>
+        <span class="toggle">
+          <input type="checkbox" id="detectMedia">
+          <span class="slider"></span>
+        </span>
+      </label>
+      <label class="setting toggle-setting" for="showMediaBadge">
+        <span>
+          <strong>Show the detected-source counter</strong>
+          <small>Keeps diagnostics available on the toolbar icon.</small>
+        </span>
+        <span class="toggle">
+          <input type="checkbox" id="showMediaBadge">
+          <span class="slider"></span>
+        </span>
+      </label>
+    </section>
+
+    <section>
+      <h2>Compatibility</h2>
+      <label class="setting toggle-setting" for="fallbackToProtocol">
+        <span>
+          <strong>Open the old Parabolic app if the bridge is missing</strong>
+          <small>Disabled by default because this switches focus away from Firefox.</small>
+        </span>
+        <span class="toggle">
+          <input type="checkbox" id="fallbackToProtocol">
+          <span class="slider"></span>
+        </span>
+      </label>
+      <label class="setting toggle-setting" for="showContextMenu">
+        <span>
+          <strong>Show “Download link with Parabolic”</strong>
+          <small>Adds Parabolic to the Firefox right-click menu.</small>
+        </span>
+        <span class="toggle">
+          <input type="checkbox" id="showContextMenu">
+          <span class="slider"></span>
+        </span>
+      </label>
+      <label class="setting toggle-setting" for="trimPlaylist">
+        <span>
+          <strong>Download only the current YouTube video</strong>
+          <small>Removes playlist parameters from YouTube URLs.</small>
+        </span>
+        <span class="toggle">
+          <input type="checkbox" id="trimPlaylist">
+          <span class="slider"></span>
+        </span>
+      </label>
+    </section>
+  </main>
   <script src="options.js"></script>
 </body>
 </html>

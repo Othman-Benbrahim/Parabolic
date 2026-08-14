@@ -14,10 +14,12 @@ $files = @(
     "background.js",
     "utils.js",
     "media-detector.js",
+    "media-overlay.js",
     "popup.html",
     "popup.css",
     "popup.js",
     "options.html",
+    "options.css",
     "options.js"
 )
 

@@ -20,6 +20,7 @@ main {
 }
 
 header,
+.bridge-card,
 .page-section,
 .section-heading,
 .media-item,
@@ -31,6 +32,49 @@ header,
 header {
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.bridge-card {
+  gap: 9px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dedee3;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.bridge-card div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.bridge-card strong {
+  font-size: 12px;
+}
+
+.bridge-card span:not(.bridge-dot) {
+  overflow: hidden;
+  color: #6c6c73;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bridge-dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #a3a3a8;
+}
+
+.bridge-dot[data-status="ready"] {
+  background: #2d9d58;
+}
+
+.bridge-dot[data-status="missing"] {
+  background: #d18a12;
 }
 
 h1 {
@@ -215,9 +259,14 @@ button:disabled {
   }
 
   .page-section,
-  .media-item {
+  .media-item,
+  .bridge-card {
     border-color: #3e3e44;
     background: #292a2d;
+  }
+
+  .bridge-card span:not(.bridge-dot) {
+    color: #b7b7bd;
   }
 
   .pill {

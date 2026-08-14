@@ -1,96 +1,92 @@
 # Parabolic Media Detector for Firefox
 
-This directory contains the Firefox-only integration for Parabolic. It detects media in the active tab and sends either the page URL or a detected media URL to the installed Parabolic desktop application.
+Version `0.3.0` changes the Firefox integration from a toolbar-first workflow to an in-player workflow. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path.
+
+## Target user flow
+
+1. The add-on detects the active video automatically.
+2. `Download video` appears over the player.
+3. Clicking the main button uses the saved quality preset.
+4. Clicking the arrow offers 1080p, 720p, 480p, audio-only and exact formats.
+5. The Firefox background script sends a JSON command to the installed Parabolic native host.
+6. Progress and completion events return to the page and Firefox notifications.
+
+The toolbar popup remains available for bridge diagnostics and unusual pages where no usable video element can be overlaid.
 
 ## Runtime architecture
 
 ```mermaid
 flowchart TD
-    A["Firefox page and embedded frames"] --> B["HTML5 media scan"]
-    A --> C["Network response observation"]
-    B --> D["Per-tab detection cache"]
-    C --> D
-    D --> E["Toolbar popup"]
-    E --> F["Parabolic desktop: yt-dlp and aria2c"]
+    A["Firefox media page"] --> B["Detection and player overlay"]
+    B --> C["Firefox background script"]
+    C --> D["Native Messaging host"]
+    D --> E["Parabolic download engine"]
+    E --> C
 ```
 
-No browsing data or detected URL is sent to a remote service by the extension.
+No detected URL or browsing data is sent to a remote service by the add-on. URLs leave Firefox only when the user starts a download or explicitly requests the format list.
 
 ## Files
 
-### Existing files replaced
-
 | Path | Purpose |
 | --- | --- |
-| `extension/firefox/manifest.json` | Firefox permissions, content script, popup and add-on identity. |
-| `extension/firefox/background.js` | Network detection, per-tab cache, badge, context menu and Parabolic protocol integration. |
-| `extension/firefox/options.html` | Settings interface. |
-| `extension/firefox/options.js` | Loads and saves Firefox settings. |
-| `Nickvision.Parabolic.Shared/Controllers/MainWindowController.cs` | Parses initial and forwarded protocol URLs consistently. |
-| `Nickvision.Parabolic.WinUI/App.xaml.cs` | Restores the running window and opens forwarded URLs. |
-| `Nickvision.Parabolic.WinUI/Program.cs` | Selects the primary instance and forwards later launches. |
+| `manifest.json` | Firefox permissions, stable add-on identity and content scripts. |
+| `background.js` | Network detection, per-tab media cache, Native Messaging client, progress relay and legacy fallback. |
+| `media-detector.js` | Detects HTML5 sources inside pages and embedded frames. |
+| `media-overlay.js` | Selects the primary visible video and renders the isolated in-player interface. |
+| `popup.html`, `popup.css`, `popup.js` | Secondary diagnostics and detected-source interface. |
+| `options.html`, `options.css`, `options.js` | Overlay, quality, detection and compatibility preferences. |
+| `NATIVE-MESSAGING-PROTOCOL.md` | Contract that the Windows host must implement in the next phase. |
+| `build-addon.ps1` | Packages the development add-on on Windows. |
 
-### New files
+`utils.js` and the `icons/` directory remain required.
 
-| Path | Purpose |
-| --- | --- |
-| `extension/firefox/media-detector.js` | Detects HTML5 media inside pages and cross-origin frames. |
-| `extension/firefox/popup.html` | Toolbar popup structure. |
-| `extension/firefox/popup.css` | Toolbar popup styles, including dark mode. |
-| `extension/firefox/popup.js` | Lists sources and sends the selected URL to Parabolic. |
-| `extension/firefox/build-addon.ps1` | Creates an unsigned development XPI on Windows. |
-| `extension/firefox/ARCHITECTURE.md` | Architecture and file placement guide. |
-| `Nickvision.Parabolic.WinUI/Helpers/SingleInstanceManager.cs` | Local mutex and named-pipe coordination for Windows activations. |
-| `.github/workflows/firefox.yml` | Validates and packages the Firefox add-on in GitHub Actions. |
+## Overlay behavior
 
-`utils.js` and the `icons/` directory remain unchanged and are still required.
+The content script scores visible `<video>` elements by viewport area and gives a priority bonus to a playing video. It displays one control for the primary video in each document or embedded frame. A closed Shadow DOM isolates the interface from site CSS and page scripts.
 
-## Detection strategy
+The control follows scrolling, page mutations and responsive resizing. It can be placed in any player corner from the options page. Videos smaller than 240 by 120 CSS pixels are ignored to reduce buttons on thumbnails and advertisements.
 
-The extension combines two complementary methods:
+YouTube videos use a `blob:` source through Media Source Extensions. The overlay therefore sends the stable page URL, not the temporary blob URL. The background detector still recognizes `googlevideo.com/videoplayback` traffic for diagnostics.
 
-1. `webRequest.onHeadersReceived` detects HLS manifests, DASH manifests and direct audio/video responses using their URL and `Content-Type` header.
-2. A content script running in every frame inspects HTML5 media elements. This also provides useful titles and video dimensions when the browser exposes them.
+## Native bridge boundary
 
-Individual HLS/DASH segments such as `.ts` and `.m4s` are ignored. Up to 60 unique candidates are retained per tab. The cache is cleared when the tab navigates or closes.
-
-## Communication with Parabolic
-
-Version `0.2.0` reuses Parabolic's existing custom URI protocol:
+The add-on requests the native application name:
 
 ```text
-parabolic://example.org/video
+com.nickvision.parabolic
 ```
 
-The desktop application converts this back to an HTTPS URL and opens its existing add-download interface. If Parabolic is already running, the new process forwards the URL through a local named pipe, restores the existing window and opens the analysis dialog there. The first button in the popup sends the page URL to `yt-dlp`; this is normally the most reliable route for supported platforms. Direct detected streams are offered as fallbacks.
+The current upstream Parabolic release does not install this host. Until the adapted desktop release exists:
 
-## Local development install
+- the button and menus can be tested;
+- native status reports `App update required`;
+- clicking a native download displays an explanatory error;
+- `Open installed Parabolic (compatibility mode)` still uses `parabolic://` explicitly.
+
+Automatic fallback is disabled by default because it changes focus away from Firefox. It can be enabled in settings for temporary testing.
+
+## Privacy and security
+
+- Native requests accept only HTTP and HTTPS page/media URLs.
+- Titles, format IDs and source-kind fields are length-limited before leaving the extension.
+- Page-controlled JavaScript cannot call Native Messaging directly; requests pass through the isolated content script and background validation.
+- Cookies are not collected or transmitted by this version.
+- DRM decryption is outside the project scope.
+
+## Local development
 
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Select **Load Temporary Add-on**.
 3. Select `extension/firefox/manifest.json`.
-4. Open a page containing a video and start playback.
-5. Click the Parabolic toolbar icon.
+4. Open or reload a page containing a large video.
+5. Start playback and verify that `Download video` appears over the player.
+6. Open the arrow menu to test positioning, presets and bridge diagnostics.
 
-Parabolic must be installed and its `parabolic://` protocol registered for the download buttons to open the desktop application.
-
-## Build the development XPI on Windows
-
-Run from PowerShell:
+The add-on can be packaged on Windows with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\extension\firefox\build-addon.ps1
 ```
 
-The script writes the package to `dist/parabolic-media-detector-<version>-unsigned.xpi`. Firefox release builds require Mozilla signing for permanent installation. The unsigned package is intended for validation and submission to Mozilla Add-ons.
-
-## YouTube behavior
-
-YouTube uses Media Source Extensions and adaptive requests served from `googlevideo.com`. The Firefox extension recognizes `videoplayback` traffic, groups the audio and video requests into one YouTube candidate and sends the stable watch-page URL to Parabolic. The temporary range URLs are deliberately not offered for direct download.
-
-## Current boundary
-
-- DRM-protected media is intentionally unsupported.
-- Signed stream URLs can expire; in this case, send the page URL instead.
-- Some direct streams require cookies or a `Referer`; `yt-dlp` page extraction is preferred for them.
-- This version does not intercept ordinary non-media downloads.
+The resulting unsigned XPI is intended for development and Mozilla Add-ons submission. Permanent installation in regular Firefox requires Mozilla signing.

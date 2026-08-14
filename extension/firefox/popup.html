@@ -11,17 +11,25 @@
     <header>
       <div>
         <h1>Parabolic</h1>
-        <p>Media detected in this tab</p>
+        <p>Downloads and diagnostics</p>
       </div>
       <button id="settingsButton" class="icon-button" type="button" title="Settings" aria-label="Open settings">⚙</button>
     </header>
+
+    <section class="bridge-card" aria-live="polite">
+      <span id="bridgeDot" class="bridge-dot"></span>
+      <div>
+        <strong id="bridgeTitle">Checking Parabolic…</strong>
+        <span id="bridgeDetails">Looking for the Firefox native bridge</span>
+      </div>
+    </section>
 
     <section id="pageSection" class="page-section">
       <div class="page-copy">
         <strong id="pageTitle">Current page</strong>
         <span id="pageHost"></span>
       </div>
-      <button id="downloadPageButton" class="primary-button" type="button">Analyze page</button>
+      <button id="downloadPageButton" class="primary-button" type="button">Quick download</button>
     </section>
 
     <div class="section-heading">
@@ -31,7 +39,7 @@
 
     <section id="mediaList" class="media-list" aria-live="polite"></section>
     <p id="emptyState" class="empty-state" hidden>
-      Start playing a video to detect its media streams. You can still send the page directly to Parabolic.
+      Start playing a video to detect its media streams. The in-player button is now the recommended way to download.
     </p>
     <p id="errorState" class="error-state" hidden></p>
     <p id="statusState" class="status-state" role="status" hidden></p>
