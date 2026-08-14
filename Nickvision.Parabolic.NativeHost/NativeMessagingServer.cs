@@ -446,7 +446,10 @@ internal sealed class NativeMessagingServer : IDisposable
             return;
         }
         var log = eventArgs.LogChunk.ToString();
-        var status = log.Contains("Merger", StringComparison.OrdinalIgnoreCase)
+        var message = GetProgressMessage(eventArgs.LogChunk);
+        var status = log.Contains("ERROR:", StringComparison.OrdinalIgnoreCase)
+            ? "failed"
+            : log.Contains("Merger", StringComparison.OrdinalIgnoreCase)
             || log.Contains("Merging", StringComparison.OrdinalIgnoreCase)
             ? "merging"
             : "downloading";
@@ -460,7 +463,8 @@ internal sealed class NativeMessagingServer : IDisposable
                 : null,
             Speed = eventArgs.Speed > 0 ? eventArgs.SpeedString : null,
             Eta = eventArgs.Eta >= 0 ? eventArgs.Eta : null,
-            Filename = Path.GetFileName(session.Path)
+            Filename = Path.GetFileName(session.Path),
+            Message = message
         });
     }
 
@@ -626,6 +630,18 @@ internal sealed class NativeMessagingServer : IDisposable
         }
         error = error.Trim();
         return error.Length <= 400 ? error : $"{error[..397]}...";
+    }
+
+    private static string? GetProgressMessage(ReadOnlyMemory<char> logChunk)
+    {
+        var message = logChunk.ToString().Trim();
+        if (string.IsNullOrWhiteSpace(message)
+            || message.StartsWith("[Parabolic] Progress", StringComparison.Ordinal)
+            || message.StartsWith("[debug]", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+        return message.Length <= 300 ? message : $"{message[..297]}...";
     }
 
     private sealed class CachedDiscovery

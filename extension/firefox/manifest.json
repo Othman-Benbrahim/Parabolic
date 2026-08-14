@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Parabolic Media Detector",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "Adds an in-player download button and sends media to Parabolic in the background.",
   "author": "NickvisionApps, OwlRoyalty & Othman Benbrahim",
   "homepage_url": "https://github.com/Othman-Benbrahim/Parabolic",

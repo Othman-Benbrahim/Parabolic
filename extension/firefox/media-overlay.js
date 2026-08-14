@@ -1,4 +1,5 @@
 (() => {
+  const ADDON_VERSION = browser.runtime.getManifest().version;
   const DEFAULT_SETTINGS = {
     detectMedia: true,
     showOverlay: true,
@@ -30,10 +31,19 @@
   let positionFrame = null;
   let scanTimer = null;
   let hideToastTimer = null;
+  let downloadWatchdogTimer = null;
   let currentDownloadId = null;
   let currentDownloadActive = false;
   const acknowledgedDownloads = new Set();
   const earlyDownloadStates = new Map();
+
+  // Firefox does not replace content scripts that are already running when a
+  // temporary add-on is reloaded. Remove any overlay left by the previous
+  // instance so a manually injected/reloaded build cannot leave the old UI on
+  // top of the current one. A normal page reload also clears that old script.
+  for (const staleOverlay of document.querySelectorAll("[data-parabolic-overlay]")) {
+    staleOverlay.remove();
+  }
 
   const overlayCss = `
     :host {
@@ -304,6 +314,7 @@
       return;
     }
     showToast("Cancelling download…", "info", true);
+    clearDownloadWatchdog();
     const response = await browser.runtime.sendMessage({
       type: "native-cancel",
       downloadId: currentDownloadId
@@ -311,6 +322,36 @@
     if (!response?.ok) {
       showToast(response?.error?.message || "Unable to cancel the download.", "error", true, "cancel");
     }
+  }
+
+  function clearDownloadWatchdog() {
+    if (downloadWatchdogTimer) {
+      clearTimeout(downloadWatchdogTimer);
+      downloadWatchdogTimer = null;
+    }
+  }
+
+  function armDownloadWatchdog(downloadId, timeoutMilliseconds = 30000) {
+    clearDownloadWatchdog();
+    downloadWatchdogTimer = setTimeout(() => {
+      if (currentDownloadActive && (!downloadId || currentDownloadId === downloadId)) {
+        const stalledDownloadId = currentDownloadId;
+        currentDownloadActive = false;
+        currentDownloadId = null;
+        if (stalledDownloadId) {
+          browser.runtime.sendMessage({
+            type: "native-cancel",
+            downloadId: stalledDownloadId
+          }).catch(() => undefined);
+        }
+        showToast(
+          "No new yt-dlp output was received for 30 seconds. The stalled download was stopped.",
+          "error",
+          true
+        );
+      }
+      downloadWatchdogTimer = null;
+    }, timeoutMilliseconds);
   }
 
   async function openCurrentDownloadFolder() {
@@ -354,6 +395,7 @@
       }
       menu.hidden = true;
       if (response.mode === "legacy") {
+        clearDownloadWatchdog();
         showToast(response.warning || "Opened Parabolic in compatibility mode.", "info");
       } else if (downloadId && earlyDownloadStates.has(downloadId)) {
         const earlyStatus = earlyDownloadStates.get(downloadId);
@@ -368,6 +410,7 @@
         }
       } else {
         currentDownloadActive = true;
+        armDownloadWatchdog(downloadId);
         showToast(
           response.result?.status === "queued" ? "Download queued…" : "Preparing download…",
           "info",
@@ -376,6 +419,7 @@
         );
       }
     } catch (error) {
+      clearDownloadWatchdog();
       currentDownloadId = null;
       currentDownloadActive = false;
       showToast(
@@ -494,6 +538,7 @@
     }
     host = document.createElement("div");
     host.setAttribute("data-parabolic-overlay", "");
+    host.setAttribute("data-parabolic-version", ADDON_VERSION);
     shadow = host.attachShadow({ mode: "closed" });
 
     const style = document.createElement("style");
@@ -524,7 +569,7 @@
     const header = document.createElement("div");
     header.className = "menu-header";
     const headerTitle = document.createElement("span");
-    headerTitle.textContent = "Download with Parabolic";
+    headerTitle.textContent = `Download with Parabolic · v${ADDON_VERSION}`;
     bridgeIndicator = document.createElement("span");
     bridgeIndicator.className = "bridge";
     bridgeIndicator.dataset.status = "checking";
@@ -660,6 +705,7 @@
     }
     if (message?.type === "parabolic-native-event") {
       const event = message.event || {};
+      clearDownloadWatchdog();
       if (event.downloadId && !acknowledgedDownloads.has(event.downloadId)) {
         earlyDownloadStates.set(event.downloadId, event.status);
       }
@@ -671,16 +717,21 @@
       }
       if (event.status === "analyzing") {
         currentDownloadActive = true;
-        showToast("Analyzing available media…", "info", true);
+        armDownloadWatchdog(event.downloadId, 60000);
+        showToast(event.message || "Analyzing available media…", "info", true);
       } else if (event.status === "queued") {
         currentDownloadActive = true;
         showToast("Download queued…", "info", true, "cancel");
       } else if (event.status === "downloading") {
         currentDownloadActive = true;
-        const percent = Number.isFinite(event.progress) ? ` ${Math.round(event.progress)}%` : "";
-        showToast(`Downloading…${percent}`, "info", true, "cancel");
+        armDownloadWatchdog(event.downloadId);
+        const statusMessage = Number.isFinite(event.progress)
+          ? `Downloading… ${Math.round(event.progress)}%`
+          : event.message || "Starting yt-dlp…";
+        showToast(statusMessage, "info", true, "cancel");
       } else if (event.status === "merging") {
         currentDownloadActive = true;
+        armDownloadWatchdog(event.downloadId, 60000);
         showToast("Merging video and audio…", "info", true, "cancel");
       } else if (event.status === "completed") {
         currentDownloadActive = false;
