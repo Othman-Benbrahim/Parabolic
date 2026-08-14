@@ -480,7 +480,7 @@ internal sealed class NativeMessagingServer : IDisposable
             Filename = Path.GetFileName(eventArgs.Path),
             Message = eventArgs.Status == DownloadStatus.Success
                 ? null
-                : "The download failed. Check the Parabolic application log for details."
+                : GetDownloadFailureMessage(eventArgs.Log)
         });
     }
 
@@ -613,6 +613,19 @@ internal sealed class NativeMessagingServer : IDisposable
             var value when value >= kib => $"{value / kib:0.0} KiB",
             _ => $"{bytes} B"
         };
+    }
+
+    private static string GetDownloadFailureMessage(ReadOnlyMemory<char> log)
+    {
+        var lines = log.ToString().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        var error = lines.LastOrDefault(line => line.Contains("ERROR:", StringComparison.OrdinalIgnoreCase))
+            ?? lines.LastOrDefault();
+        if (string.IsNullOrWhiteSpace(error))
+        {
+            return "The download failed before yt-dlp returned an error message.";
+        }
+        error = error.Trim();
+        return error.Length <= 400 ? error : $"{error[..397]}...";
     }
 
     private sealed class CachedDiscovery

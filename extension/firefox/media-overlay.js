@@ -31,6 +31,9 @@
   let scanTimer = null;
   let hideToastTimer = null;
   let currentDownloadId = null;
+  let currentDownloadActive = false;
+  const acknowledgedDownloads = new Set();
+  const earlyDownloadStates = new Map();
 
   const overlayCss = `
     :host {
@@ -330,6 +333,10 @@
       showToast("No active video was found.", "error");
       return;
     }
+    if (currentDownloadActive) {
+      showToast("A download is already active.", "info", true, "cancel");
+      return;
+    }
     setBusy(true);
     showToast("Sending to Parabolic…", "info", true);
     try {
@@ -340,15 +347,37 @@
       if (!response?.ok) {
         throw new Error(response?.error?.message || "Parabolic could not start the download.");
       }
-      currentDownloadId = response.result?.downloadId || null;
+      const downloadId = response.result?.downloadId || null;
+      currentDownloadId = downloadId;
+      if (downloadId) {
+        acknowledgedDownloads.add(downloadId);
+      }
       menu.hidden = true;
       if (response.mode === "legacy") {
         showToast(response.warning || "Opened Parabolic in compatibility mode.", "info");
+      } else if (downloadId && earlyDownloadStates.has(downloadId)) {
+        const earlyStatus = earlyDownloadStates.get(downloadId);
+        earlyDownloadStates.delete(downloadId);
+        const isTerminal = ["completed", "failed", "cancelled"].includes(earlyStatus);
+        currentDownloadActive = !isTerminal;
+        if (isTerminal) {
+          acknowledgedDownloads.delete(downloadId);
+        }
+        if (["failed", "cancelled"].includes(earlyStatus)) {
+          currentDownloadId = null;
+        }
       } else {
-        showToast("Download started. You can keep watching.", "success", true, "cancel");
+        currentDownloadActive = true;
+        showToast(
+          response.result?.status === "queued" ? "Download queued…" : "Preparing download…",
+          "info",
+          true,
+          "cancel"
+        );
       }
     } catch (error) {
       currentDownloadId = null;
+      currentDownloadActive = false;
       showToast(
         error.message || "Install the upcoming Parabolic release to enable background downloads.",
         "error",
@@ -631,6 +660,9 @@
     }
     if (message?.type === "parabolic-native-event") {
       const event = message.event || {};
+      if (event.downloadId && !acknowledgedDownloads.has(event.downloadId)) {
+        earlyDownloadStates.set(event.downloadId, event.status);
+      }
       if (currentDownloadId && event.downloadId && event.downloadId !== currentDownloadId) {
         return;
       }
@@ -638,22 +670,32 @@
         currentDownloadId = event.downloadId;
       }
       if (event.status === "analyzing") {
+        currentDownloadActive = true;
         showToast("Analyzing available media…", "info", true);
       } else if (event.status === "queued") {
+        currentDownloadActive = true;
         showToast("Download queued…", "info", true, "cancel");
       } else if (event.status === "downloading") {
+        currentDownloadActive = true;
         const percent = Number.isFinite(event.progress) ? ` ${Math.round(event.progress)}%` : "";
         showToast(`Downloading…${percent}`, "info", true, "cancel");
       } else if (event.status === "merging") {
+        currentDownloadActive = true;
         showToast("Merging video and audio…", "info", true, "cancel");
       } else if (event.status === "completed") {
+        currentDownloadActive = false;
         showToast("Download complete.", "success", true, "open-folder");
       } else if (event.status === "failed") {
         showToast(event.message || "The download failed.", "error", true);
+        currentDownloadActive = false;
         currentDownloadId = null;
       } else if (event.status === "cancelled") {
         showToast("Download cancelled.", "info");
+        currentDownloadActive = false;
         currentDownloadId = null;
+      }
+      if (event.downloadId && ["completed", "failed", "cancelled"].includes(event.status)) {
+        acknowledgedDownloads.delete(event.downloadId);
       }
     }
   });
