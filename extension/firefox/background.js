@@ -424,10 +424,21 @@ function normalizedDownloadPayload(message, sender) {
     throw new Error("No downloadable page or media URL was provided.");
   }
 
-  let processedPageUrl = pageUrl;
-  if (settings.trimPlaylist && isHttpUrl(pageUrl)) {
-    processedPageUrl = trimPlaylistFromUrl(pageUrl);
-  }
+  // A YouTube watch/short/live URL always represents the video currently
+  // shown by the in-player controls. Keeping list/index makes yt-dlp inspect
+  // the complete playlist, which delays or stalls both format discovery and
+  // one-click downloads. Explicit /playlist URLs remain playlists unless the
+  // user enables the compatibility option that trims all playlist parameters.
+  const normalizePageUrl = (value) => {
+    if (!isHttpUrl(value)) {
+      return "";
+    }
+    return settings.trimPlaylist || isYouTubePlaybackUrl(value)
+      ? trimPlaylistFromUrl(value)
+      : value;
+  };
+  const processedPageUrl = normalizePageUrl(pageUrl);
+  const processedFrameUrl = normalizePageUrl(source.frameUrl);
   const fallbackPreset = DOWNLOAD_PRESETS.has(settings.quickDownloadPreset)
     ? settings.quickDownloadPreset
     : "best";
@@ -442,7 +453,7 @@ function normalizedDownloadPayload(message, sender) {
     preset,
     formatId: String(source.formatId || "").slice(0, 200),
     sourceKind: String(source.sourceKind || "page").slice(0, 40),
-    frameUrl: isHttpUrl(source.frameUrl) ? source.frameUrl : ""
+    frameUrl: processedFrameUrl
   };
 }
 
