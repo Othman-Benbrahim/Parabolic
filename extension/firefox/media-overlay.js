@@ -290,6 +290,9 @@
     if (action === "open-folder" && currentDownloadId) {
       toastActions.append(createToastAction("Open folder", openCurrentDownloadFolder));
     }
+    if (action === "update-ytdlp") {
+      toastActions.append(createToastAction("Update yt-dlp", updateYtdlp));
+    }
     toast.dataset.kind = kind;
     toast.hidden = false;
     toast.classList.toggle("above", shouldOpenAbove());
@@ -524,6 +527,30 @@
     }
   }
 
+  async function updateYtdlp() {
+    menu.hidden = true;
+    menuButton.setAttribute("aria-expanded", "false");
+    showToast("Checking for a yt-dlp update…", "info", true);
+    try {
+      const check = await browser.runtime.sendMessage({ type: "native-ytdlp-check" });
+      if (!check?.ok) {
+        throw new Error(check?.error?.message || "Unable to check for a yt-dlp update.");
+      }
+      if (!check.result?.updateAvailable) {
+        showToast(check.result?.message || "yt-dlp is already up to date.", "success");
+        return;
+      }
+      showToast(`Updating yt-dlp to ${check.result.latestVersion}…`, "info", true);
+      const update = await browser.runtime.sendMessage({ type: "native-ytdlp-update" });
+      if (!update?.ok) {
+        throw new Error(update?.error?.message || "Unable to update yt-dlp.");
+      }
+      showToast(update.result?.message || "yt-dlp was updated successfully.", "success");
+    } catch (error) {
+      showToast(error.message || "Unable to update yt-dlp.", "error", true, "update-ytdlp");
+    }
+  }
+
   function shouldOpenAbove() {
     if (!primaryMedia) {
       return false;
@@ -596,9 +623,20 @@
     legacyButton.className = "link-button";
     legacyButton.textContent = "Open installed Parabolic (compatibility mode)";
     legacyButton.addEventListener("click", openLegacyMode);
+    const ytdlpUpdateButton = document.createElement("button");
+    ytdlpUpdateButton.type = "button";
+    ytdlpUpdateButton.className = "link-button";
+    ytdlpUpdateButton.textContent = "Check and update yt-dlp";
+    ytdlpUpdateButton.addEventListener("click", updateYtdlp);
+    menu.append(ytdlpUpdateButton);
     menu.append(legacyButton);
 
     menuButton.addEventListener("click", () => {
+      if (currentDownloadActive) {
+        browser.runtime.sendMessage({ type: "bridge-pulse" }).catch(() => undefined);
+        showToast("Reactivating Parabolic…", "info", true, "cancel");
+        return;
+      }
       menu.hidden = !menu.hidden;
       menuButton.setAttribute("aria-expanded", String(!menu.hidden));
       if (!menu.hidden) {
@@ -724,7 +762,9 @@
         showToast("Download queued…", "info", true, "cancel");
       } else if (event.status === "downloading") {
         currentDownloadActive = true;
-        armDownloadWatchdog(event.downloadId);
+        if (Number.isFinite(event.progress) || event.message) {
+          armDownloadWatchdog(event.downloadId);
+        }
         const statusMessage = Number.isFinite(event.progress)
           ? `Downloading… ${Math.round(event.progress)}%`
           : event.message || "Starting yt-dlp…";
@@ -737,7 +777,7 @@
         currentDownloadActive = false;
         showToast("Download complete.", "success", true, "open-folder");
       } else if (event.status === "failed") {
-        showToast(event.message || "The download failed.", "error", true);
+        showToast(event.message || "The download failed.", "error", true, "update-ytdlp");
         currentDownloadActive = false;
         currentDownloadId = null;
       } else if (event.status === "cancelled") {

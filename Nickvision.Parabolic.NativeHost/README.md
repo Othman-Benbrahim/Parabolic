@@ -14,8 +14,13 @@ save folder and media preferences as the desktop application.
 - `download`
 - `cancel`
 - `open-folder`
+- `check-ytdlp-update`
+- `update-ytdlp`
 
 Download progress and final state are emitted as asynchronous events.
+The update commands use Parabolic's existing stable yt-dlp updater. Updates are
+explicitly requested by the user and are refused while downloads are active or
+queued.
 
 ## Publish and smoke test
 

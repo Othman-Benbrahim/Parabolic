@@ -3,7 +3,7 @@
 This adapted release contains two coordinated components:
 
 - Parabolic for Windows `2026.8.0`, including the Firefox Native Messaging host;
-- Parabolic Media Detector for Firefox `0.3.0`.
+- Parabolic Media Detector for Firefox `0.4.0`.
 
 ## Automated Windows build
 
@@ -48,9 +48,23 @@ After installing the x64 or ARM64 setup package:
 3. open its toolbar diagnostics and confirm `App ready`;
 4. test `Best quality`, one capped preset and `Audio only`;
 5. test exact format loading, progress, cancellation and `Open folder`;
-6. close the Parabolic window and confirm that a new download starts without
+6. open the quality menu, select `Check and update yt-dlp`, and verify both the
+   already-current and update-available paths;
+7. close the Parabolic window and confirm that a new download starts without
    reopening it;
-7. verify a failed or unsupported URL shows a safe user-facing error.
+8. verify a failed or unsupported URL shows a safe user-facing error and offers
+   the explicit yt-dlp update action.
+
+## Automated Flatpak build
+
+The `Flatpak` workflow uses the GNOME 50 build container required by the
+manifest. A validation step first checks the runtime/container pairing, the
+.NET 10 SDK extension, the x86_64 and aarch64 runtime mappings, and duplicate
+offline NuGet/Python sources. The builder then produces
+`org.nickvision.tubeconverter.flatpak` for both architectures.
+
+If the validation step succeeds but the builder fails, capture the first error
+inside the `flatpak-builder` step rather than the later cancelled matrix job.
 
 ## Release gate
 

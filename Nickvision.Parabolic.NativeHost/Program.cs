@@ -30,7 +30,8 @@ internal static class Program
                 transport,
                 host.Services.GetRequiredService<IConfigurationService>(),
                 host.Services.GetRequiredService<IDiscoveryService>(),
-                host.Services.GetRequiredService<IDownloadService>());
+                host.Services.GetRequiredService<IDownloadService>(),
+                host.Services.GetRequiredService<IYtdlpExecutableService>());
             await server.RunAsync(shutdown.Token);
 
             shutdown.Cancel();

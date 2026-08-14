@@ -28,26 +28,31 @@ internal sealed class NativeMessagingServer : IDisposable
     private readonly IConfigurationService _configurationService;
     private readonly IDiscoveryService _discoveryService;
     private readonly IDownloadService _downloadService;
+    private readonly IYtdlpExecutableService _ytdlpExecutableService;
     private readonly ConcurrentDictionary<string, CachedDiscovery> _discoveryCache;
     private readonly ConcurrentDictionary<int, DownloadSession> _sessionsByInternalId;
     private readonly ConcurrentDictionary<string, DownloadSession> _sessionsByExternalId;
     private readonly SemaphoreSlim _downloadMutationLock;
+    private readonly SemaphoreSlim _dependencyUpdateLock;
     private CancellationToken _shutdownToken;
 
     public NativeMessagingServer(
         NativeMessagingTransport transport,
         IConfigurationService configurationService,
         IDiscoveryService discoveryService,
-        IDownloadService downloadService)
+        IDownloadService downloadService,
+        IYtdlpExecutableService ytdlpExecutableService)
     {
         _transport = transport;
         _configurationService = configurationService;
         _discoveryService = discoveryService;
         _downloadService = downloadService;
+        _ytdlpExecutableService = ytdlpExecutableService;
         _discoveryCache = new ConcurrentDictionary<string, CachedDiscovery>(StringComparer.Ordinal);
         _sessionsByInternalId = new ConcurrentDictionary<int, DownloadSession>();
         _sessionsByExternalId = new ConcurrentDictionary<string, DownloadSession>(StringComparer.Ordinal);
         _downloadMutationLock = new SemaphoreSlim(1, 1);
+        _dependencyUpdateLock = new SemaphoreSlim(1, 1);
         _shutdownToken = CancellationToken.None;
         _downloadService.DownloadProgressChanged += DownloadService_DownloadProgressChanged;
         _downloadService.DownloadCompleted += DownloadService_DownloadCompleted;
@@ -87,6 +92,7 @@ internal sealed class NativeMessagingServer : IDisposable
         _downloadService.DownloadCompleted -= DownloadService_DownloadCompleted;
         _downloadService.DownloadStopped -= DownloadService_DownloadStopped;
         _downloadMutationLock.Dispose();
+        _dependencyUpdateLock.Dispose();
     }
 
     private async Task HandleRequestAsync(NativeRequest request, CancellationToken cancellationToken)
@@ -100,7 +106,7 @@ internal sealed class NativeMessagingServer : IDisposable
                     await SendSuccessAsync(request.RequestId, new HelloResponse
                     {
                         AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.0",
-                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder"]
+                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update"]
                     }, NativeJsonContext.Default.HelloResponse, cancellationToken);
                     break;
                 case "get-formats":
@@ -114,6 +120,12 @@ internal sealed class NativeMessagingServer : IDisposable
                     break;
                 case "open-folder":
                     await HandleOpenFolderAsync(request, cancellationToken);
+                    break;
+                case "check-ytdlp-update":
+                    await HandleCheckYtdlpUpdateAsync(request, cancellationToken);
+                    break;
+                case "update-ytdlp":
+                    await HandleYtdlpUpdateAsync(request, cancellationToken);
                     break;
                 default:
                     throw new NativeRequestException("UNKNOWN_REQUEST", $"Unsupported Native Messaging request: {request.Type}.");
@@ -146,6 +158,92 @@ internal sealed class NativeMessagingServer : IDisposable
         {
             Formats = discovery.Formats.Values.Select(cached => cached.Choice).Take(20).ToList()
         }, NativeJsonContext.Default.FormatsResponse, cancellationToken);
+    }
+
+    private async Task HandleCheckYtdlpUpdateAsync(NativeRequest request, CancellationToken cancellationToken)
+    {
+        var current = await GetCurrentYtdlpVersionAsync();
+        var latest = await _ytdlpExecutableService.GetLatestStableVersionAsync()
+            ?? throw new NativeRequestException(
+                "YTDLP_UPDATE_CHECK_FAILED",
+                "Parabolic could not retrieve the latest stable yt-dlp version.");
+        await SendSuccessAsync(request.RequestId, new YtdlpUpdateResponse
+        {
+            CurrentVersion = current?.ToString() ?? "unknown",
+            LatestVersion = latest.ToString(),
+            UpdateAvailable = current is null || latest > current,
+            Updated = false,
+            Message = current is not null && latest <= current
+                ? $"yt-dlp {current} is already up to date."
+                : $"yt-dlp {latest} is available."
+        }, NativeJsonContext.Default.YtdlpUpdateResponse, cancellationToken);
+    }
+
+    private async Task HandleYtdlpUpdateAsync(NativeRequest request, CancellationToken cancellationToken)
+    {
+        if (_downloadService.RemainingCount > 0)
+        {
+            throw new NativeRequestException(
+                "DOWNLOADS_ACTIVE",
+                "Wait for active and queued downloads to finish before updating yt-dlp.");
+        }
+        await _dependencyUpdateLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_downloadService.RemainingCount > 0)
+            {
+                throw new NativeRequestException(
+                    "DOWNLOADS_ACTIVE",
+                    "Wait for active and queued downloads to finish before updating yt-dlp.");
+            }
+            var current = await GetCurrentYtdlpVersionAsync();
+            var latest = await _ytdlpExecutableService.GetLatestStableVersionAsync()
+                ?? throw new NativeRequestException(
+                    "YTDLP_UPDATE_CHECK_FAILED",
+                    "Parabolic could not retrieve the latest stable yt-dlp version.");
+            if (current is not null && latest <= current)
+            {
+                await SendSuccessAsync(request.RequestId, new YtdlpUpdateResponse
+                {
+                    CurrentVersion = current.ToString(),
+                    LatestVersion = latest.ToString(),
+                    UpdateAvailable = false,
+                    Updated = false,
+                    Message = $"yt-dlp {current} is already up to date."
+                }, NativeJsonContext.Default.YtdlpUpdateResponse, cancellationToken);
+                return;
+            }
+            if (!await _ytdlpExecutableService.DownloadUpdateAsync(latest))
+            {
+                throw new NativeRequestException(
+                    "YTDLP_UPDATE_FAILED",
+                    $"Parabolic could not download or install yt-dlp {latest}.");
+            }
+            await SendSuccessAsync(request.RequestId, new YtdlpUpdateResponse
+            {
+                CurrentVersion = latest.ToString(),
+                LatestVersion = latest.ToString(),
+                UpdateAvailable = false,
+                Updated = true,
+                Message = $"yt-dlp was updated successfully to {latest}."
+            }, NativeJsonContext.Default.YtdlpUpdateResponse, cancellationToken);
+        }
+        finally
+        {
+            _dependencyUpdateLock.Release();
+        }
+    }
+
+    private async Task<Nickvision.Desktop.Application.AppVersion?> GetCurrentYtdlpVersionAsync()
+    {
+        try
+        {
+            return await _ytdlpExecutableService.GetExecutableVersionAsync();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private async Task HandleDownloadAsync(NativeRequest request, CancellationToken cancellationToken)

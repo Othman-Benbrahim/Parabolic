@@ -85,6 +85,15 @@ internal sealed class DownloadResponse
     public string Status { get; set; } = "queued";
 }
 
+internal sealed class YtdlpUpdateResponse
+{
+    public string CurrentVersion { get; set; } = string.Empty;
+    public string LatestVersion { get; set; } = string.Empty;
+    public bool UpdateAvailable { get; set; }
+    public bool Updated { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
 internal sealed class EmptyPayload
 {
 }
@@ -114,6 +123,7 @@ internal sealed class DownloadEventPayload
 [JsonSerializable(typeof(FormatsResponse))]
 [JsonSerializable(typeof(FormatChoice))]
 [JsonSerializable(typeof(DownloadResponse))]
+[JsonSerializable(typeof(YtdlpUpdateResponse))]
 [JsonSerializable(typeof(EmptyPayload))]
 internal partial class NativeJsonContext : JsonSerializerContext
 {

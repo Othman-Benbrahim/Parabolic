@@ -59,18 +59,18 @@ success "Created directories."
 # Publish application
 info "Publishing application..."
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
-if [ -n "$container" ]; then
+if [ -n "${container:-}" ]; then
     dotnet publish -c Release \
         --source "$CURRENT_PWD/nuget-sources" \
         --source "/usr/lib/sdk/dotnet10/nuget/packages" \
         "../../$PROJECT/$PROJECT.csproj" \
-        --runtime $RUNTIME \
+        --runtime "$RUNTIME" \
         --self-contained true \
         -p:PublishReadyToRun=true
 else
     dotnet publish -c Release \
         "../../$PROJECT/$PROJECT.csproj" \
-        --runtime $RUNTIME \
+        --runtime "$RUNTIME" \
         --self-contained true \
         -p:PublishReadyToRun=true
 fi
@@ -140,7 +140,7 @@ success "Updated desktop database."
 
 # Restore pwd
 info "Restoring previous working directory..."
-cd $CURRENT_PWD
+cd "$CURRENT_PWD"
 success "Restored working directory to $CURRENT_PWD."
 
 echo -e "${BOLD}${BLUE}==============================================================${RESET}"

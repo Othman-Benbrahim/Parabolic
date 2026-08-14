@@ -62,7 +62,7 @@ try {
     if ($response.requestId -ne "windows-smoke-test" -or -not $response.ok) {
         throw "Native host hello request failed: $($response | ConvertTo-Json -Compress -Depth 5)"
     }
-    $requiredCapabilities = @("formats", "download", "progress", "cancel", "open-folder")
+    $requiredCapabilities = @("formats", "download", "progress", "cancel", "open-folder", "ytdlp-update")
     $missingCapabilities = @($requiredCapabilities | Where-Object {
         $response.payload.capabilities -notcontains $_
     })

@@ -30,7 +30,7 @@ public class YtdlpExecutableService : DependencyExecutableService, IYtdlpExecuta
     {
         if (OperatingSystem.IsLinux())
         {
-            YtdlpBundledVersion = new AppVersion(Desktop.System.Environment.DeploymentMode == DeploymentMode.Local ? "0.0.0" : "2026.07.04");
+            YtdlpBundledVersion = new AppVersion(Desktop.System.Environment.DeploymentMode == DeploymentMode.Local ? "0.0.0" : "2026.03.17");
         }
         else
         {

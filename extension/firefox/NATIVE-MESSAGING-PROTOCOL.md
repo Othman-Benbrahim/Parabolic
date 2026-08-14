@@ -1,6 +1,6 @@
 # Parabolic Firefox Native Messaging Protocol
 
-This document is the implementation contract between Firefox add-on `0.3.x` and the adapted Parabolic desktop release. Protocol version `1` uses Firefox Native Messaging framing with JSON message bodies.
+This document is the implementation contract between Firefox add-on `0.4.x` and the adapted Parabolic desktop release. Protocol version `1` uses Firefox Native Messaging framing with JSON message bodies.
 
 ## Host registration
 
@@ -74,7 +74,7 @@ Request payload:
 ```json
 {
   "extensionId": "parabolic-media-detector@othmanbenbrahim.dev",
-  "extensionVersion": "0.3.0",
+  "extensionVersion": "0.4.0",
   "protocolVersion": 1
 }
 ```
@@ -83,9 +83,44 @@ Response payload:
 
 ```json
 {
-    "appVersion": "2026.8.0",
+  "appVersion": "2026.8.0",
   "protocolVersion": 1,
-  "capabilities": ["formats", "download", "progress", "cancel", "open-folder"]
+  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update"]
+}
+```
+
+## `check-ytdlp-update`
+
+Checks the executable currently selected by Parabolic against the latest stable
+yt-dlp release. It does not install anything.
+
+Response payload:
+
+```json
+{
+  "currentVersion": "2026.03.17",
+  "latestVersion": "2026.8.13",
+  "updateAvailable": true,
+  "updated": false,
+  "message": "yt-dlp 2026.8.13 is available."
+}
+```
+
+## `update-ytdlp`
+
+Downloads and activates the latest stable yt-dlp release through Parabolic's
+dependency updater. This command is user initiated and fails with
+`DOWNLOADS_ACTIVE` while a download is running or queued.
+
+Response payload:
+
+```json
+{
+  "currentVersion": "2026.8.13",
+  "latestVersion": "2026.8.13",
+  "updateAvailable": false,
+  "updated": true,
+  "message": "yt-dlp was updated successfully to 2026.8.13."
 }
 ```
 

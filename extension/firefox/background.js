@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
 const NATIVE_HOST_NAME = "com.nickvision.parabolic";
 const NATIVE_PROTOCOL_VERSION = 1;
 const NATIVE_REQUEST_TIMEOUT = 8000;
+const NATIVE_PULSE_DELAY = 2000;
 const MAX_MEDIA_PER_TAB = 60;
 const MEDIA_EXTENSIONS = new Set([
   "mp4", "webm", "mov", "m4v", "mkv", "avi",
@@ -169,6 +170,25 @@ class NativeBridge {
 }
 
 const nativeBridge = new NativeBridge();
+
+function nativeHelloPayload() {
+  return {
+    extensionId: browser.runtime.id,
+    extensionVersion: browser.runtime.getManifest().version,
+    protocolVersion: NATIVE_PROTOCOL_VERSION
+  };
+}
+
+async function pulseNativeBridge(count = 2) {
+  let response = null;
+  for (let index = 0; index < count; index += 1) {
+    response = await nativeBridge.request("hello", nativeHelloPayload(), 3000);
+    if (index + 1 < count) {
+      await new Promise((resolve) => setTimeout(resolve, NATIVE_PULSE_DELAY));
+    }
+  }
+  return response;
+}
 
 function isHttpUrl(value) {
   try {
@@ -435,6 +455,9 @@ async function requestNativeDownload(message, sender) {
     if (downloadId && Number.isInteger(payload.tabId)) {
       downloadTabs.set(downloadId, payload.tabId);
     }
+    // The working manual sequence probes the host twice around the quality
+    // selection. Reproduce both pulses after enqueueing so one click is enough.
+    await pulseNativeBridge(2).catch(() => undefined);
     return {
       ok: true,
       mode: "native",
@@ -469,6 +492,24 @@ async function requestNativeFormats(message, sender) {
       ok: false,
       error: serializableError(error, "Unable to retrieve formats from Parabolic.")
     };
+  }
+}
+
+async function checkYtdlpUpdate() {
+  try {
+    const response = await nativeBridge.request("check-ytdlp-update", {}, 30000);
+    return { ok: true, result: response.payload || response };
+  } catch (error) {
+    return { ok: false, error: serializableError(error, "Unable to check for a yt-dlp update.") };
+  }
+}
+
+async function updateYtdlp() {
+  try {
+    const response = await nativeBridge.request("update-ytdlp", {}, 180000);
+    return { ok: true, result: response.payload || response };
+  } catch (error) {
+    return { ok: false, error: serializableError(error, "Unable to update yt-dlp.") };
   }
 }
 
@@ -619,12 +660,29 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     return probeNativeBridge();
   }
 
+  if (message.type === "bridge-pulse") {
+    try {
+      const response = await pulseNativeBridge(2);
+      return { ok: true, available: true, host: response.payload || response };
+    } catch (error) {
+      return { ok: false, available: false, error: serializableError(error, "Unable to reactivate the Parabolic bridge.") };
+    }
+  }
+
   if (message.type === "native-download") {
     return requestNativeDownload(message, sender);
   }
 
   if (message.type === "native-formats") {
     return requestNativeFormats(message, sender);
+  }
+
+  if (message.type === "native-ytdlp-check") {
+    return checkYtdlpUpdate();
+  }
+
+  if (message.type === "native-ytdlp-update") {
+    return updateYtdlp();
   }
 
   if (message.type === "native-cancel") {

@@ -20,10 +20,26 @@ const nativePort = {
     nativeRequests.push(message);
     queueMicrotask(() => {
       const payload = message.type === "hello"
-        ? { appVersion: "test", protocolVersion: 1 }
+        ? { appVersion: "test", protocolVersion: 1, capabilities: ["ytdlp-update"] }
         : message.type === "download"
           ? { downloadId: "download-test", status: "queued" }
-          : {};
+          : message.type === "check-ytdlp-update"
+            ? {
+                currentVersion: "2026.03.17",
+                latestVersion: "2026.8.13",
+                updateAvailable: true,
+                updated: false,
+                message: "yt-dlp 2026.8.13 is available."
+              }
+            : message.type === "update-ytdlp"
+              ? {
+                  currentVersion: "2026.8.13",
+                  latestVersion: "2026.8.13",
+                  updateAvailable: false,
+                  updated: true,
+                  message: "yt-dlp was updated successfully to 2026.8.13."
+                }
+              : {};
       for (const listener of nativeMessageListeners) {
         listener({
           protocolVersion: 1,
@@ -46,7 +62,7 @@ const browser = {
       nativeHostName = name;
       return nativePort;
     },
-    getManifest() { return { version: "0.3.0" }; },
+    getManifest() { return { version: "0.4.0" }; },
     getURL(value) { return `moz-extension://test/${value}`; },
     onMessage: { addListener(listener) { runtimeMessageListeners.push(listener); } },
     onInstalled: { addListener() {} },
@@ -116,6 +132,8 @@ async function send(message, sender = {}) {
 }
 
 (async () => {
+  assert.equal(vm.runInContext("NATIVE_PULSE_DELAY", context), 2000,
+    "The second native hello must be delayed long enough to reproduce the manual sequence");
   const bridge = await send({ type: "bridge-status" });
   assert.equal(bridge.available, true);
   assert.equal(nativeHostName, "com.nickvision.parabolic");
@@ -144,6 +162,23 @@ async function send(message, sender = {}) {
   assert.equal(request.payload.mediaUrl, "");
   assert.equal(request.payload.preset, "720");
   assert.equal(request.payload.formatId, "22");
+  assert(nativeRequests.filter((item) => item.type === "hello").length >= 3,
+    "The download path must pulse the native loop twice without requiring a second menu click");
+
+  const helloCountBeforePulse = nativeRequests.filter((item) => item.type === "hello").length;
+  const pulse = await send({ type: "bridge-pulse" }, sender);
+  assert.equal(pulse.ok, true);
+  assert.equal(nativeRequests.filter((item) => item.type === "hello").length, helloCountBeforePulse + 2);
+
+  const updateCheck = await send({ type: "native-ytdlp-check" }, sender);
+  assert.equal(updateCheck.ok, true);
+  assert.equal(updateCheck.result.updateAvailable, true);
+  assert(nativeRequests.some((item) => item.type === "check-ytdlp-update"));
+
+  const update = await send({ type: "native-ytdlp-update" }, sender);
+  assert.equal(update.ok, true);
+  assert.equal(update.result.updated, true);
+  assert(nativeRequests.some((item) => item.type === "update-ytdlp"));
 
   const cancel = await send({ type: "native-cancel", downloadId: "download-test" }, sender);
   assert.equal(cancel.ok, true);

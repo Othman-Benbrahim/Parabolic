@@ -1,6 +1,6 @@
 # Parabolic Media Detector for Firefox
 
-Version `0.3.0` changes the Firefox integration from a toolbar-first workflow to an in-player workflow. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path.
+Version `0.4.0` keeps the validated in-player download workflow from `0.3.5` and adds an on-demand yt-dlp update command. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path.
 
 ## Target user flow
 
