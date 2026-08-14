@@ -26,13 +26,16 @@ jobs:
           node-version: "24"
       - name: Validate add-on
         run: npx --yes addons-linter extension/firefox
+      - name: Test native messaging protocol
+        run: node tests/firefox/background-protocol-smoke.cjs
       - name: Package unsigned XPI
         working-directory: extension/firefox
         run: |
           version=$(node -p "require('./manifest.json').version")
           zip -r "../../parabolic-media-detector-${version}-unsigned.xpi" \
             manifest.json background.js utils.js media-detector.js \
-            popup.html popup.css popup.js options.html options.js icons
+            media-overlay.js popup.html popup.css popup.js \
+            options.html options.css options.js icons
       - uses: actions/upload-artifact@v4
         with:
           name: parabolic-media-detector-firefox
