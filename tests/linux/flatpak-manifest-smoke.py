@@ -32,9 +32,10 @@ workflow = WORKFLOW.read_text(encoding="utf-8")
 
 runtime_version = str(manifest["runtime-version"])
 require(
-    f"flatpak-github-actions:gnome-{runtime_version}" in workflow,
-    f"workflow container must use GNOME {runtime_version}",
+    "flatpak-github-actions:gnome-49" in workflow,
+    "workflow must use the supported GNOME 49 Flatpak builder image",
 )
+require(runtime_version == "50", "application runtime must remain GNOME 50")
 require(
     "org.freedesktop.Sdk.Extension.dotnet10" in manifest.get("sdk-extensions", []),
     "the .NET 10 SDK extension is required",
@@ -67,6 +68,6 @@ architectures = app_module.get("build-options", {}).get("arch", {})
 require({"x86_64", "aarch64"}.issubset(architectures), "x86_64/aarch64 build options are required")
 
 print(
-    f"Flatpak inputs OK: GNOME {runtime_version}, "
+    f"Flatpak inputs OK: GNOME {runtime_version} runtime with GNOME 49 builder, "
     f"{len(destinations)} NuGet files, {len(python_urls)} Python sources"
 )

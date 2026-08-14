@@ -57,10 +57,10 @@ After installing the x64 or ARM64 setup package:
 
 ## Automated Flatpak build
 
-The `Flatpak` workflow uses the GNOME 50 build container required by the
-manifest. A validation step first checks the runtime/container pairing, the
-.NET 10 SDK extension, the x86_64 and aarch64 runtime mappings, and duplicate
-offline NuGet/Python sources. The builder then produces
+The `Flatpak` workflow uses the supported GNOME 49 builder image to produce the
+GNOME 50 application runtime declared by the manifest. A validation step first
+checks both versions independently, the .NET 10 SDK extension, the x86_64 and
+aarch64 runtime mappings, and duplicate offline NuGet/Python sources. The builder then produces
 `org.nickvision.tubeconverter.flatpak` for both architectures.
 
 If the validation step succeeds but the builder fails, capture the first error
