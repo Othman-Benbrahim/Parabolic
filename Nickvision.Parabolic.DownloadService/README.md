@@ -1,8 +1,11 @@
 # Parabolic persistent download service
 
 This Windows per-user process owns downloads accepted from Firefox. It listens
-on the current-user-only named pipe `Parabolic.DownloadManager.v1` and remains
-active after the Firefox Native Messaging relay disconnects.
+on the named pipe `Parabolic.DownloadManager.v1`, protected by an explicit ACL
+for the owning Windows account, and remains active after the Firefox Native
+Messaging relay disconnects. The ACL intentionally permits the same account at
+different elevation levels so a non-elevated browser can reach a service that
+an elevated installer started.
 
 Its first milestone provides:
 

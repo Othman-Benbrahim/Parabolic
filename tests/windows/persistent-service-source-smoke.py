@@ -30,7 +30,10 @@ assert "browser_recovery_queue" in (
 ).read_text(encoding="utf-8-sig")
 assert "KeepPartialFiles = true" in server
 assert "PersistentDownloadCoordinator" in coordinator
-assert "PipeOptions.CurrentUserOnly" in service
+assert "NamedPipeServerStreamAcl.Create" in service
+assert "WindowsIdentity.GetCurrent" in service
+assert "PipeAccessRights.FullControl" in service
+assert "PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly" not in service
 assert "DOWNLOAD_SERVICE_PROJECT" in workflow
 assert "DOWNLOAD_SERVICE_FILES_PATH" in workflow
 assert "Nickvision.Parabolic.DownloadService.exe" in installer
