@@ -10,6 +10,10 @@ const DEFAULT_SETTINGS = {
   cobaltEndpoint: "",
   cobaltAuthScheme: "none",
   speedLimitKbps: 0,
+  networkStrategy: "balanced",
+  authenticationMode: "parabolic",
+  proxyMode: "parabolic",
+  sendPageReferer: false,
   overlayPosition: "top-right",
   fallbackToProtocol: false
 };
@@ -32,6 +36,9 @@ const HLS_MIME_TYPES = new Set([
 const DOWNLOAD_PRESETS = new Set(["best", "1080", "720", "480", "audio"]);
 const DOWNLOAD_PRIORITIES = new Set(["high", "normal", "low"]);
 const RESOLVER_PREFERENCES = new Set(["auto", "yt-dlp", "cobalt"]);
+const NETWORK_STRATEGIES = new Set(["conservative", "balanced", "aggressive"]);
+const AUTHENTICATION_MODES = new Set(["parabolic", "firefox", "none"]);
+const PROXY_MODES = new Set(["parabolic", "direct"]);
 
 const mediaByTab = new Map();
 const downloadTabs = new Map();
@@ -453,6 +460,9 @@ function normalizedDownloadPayload(message, sender) {
   const resolverPreference = RESOLVER_PREFERENCES.has(settings.resolverPreference)
     ? settings.resolverPreference
     : "auto";
+  const cobaltAuthScheme = ["none", "api-key", "bearer"].includes(settings.cobaltAuthScheme)
+    ? settings.cobaltAuthScheme
+    : "none";
   const speedLimitKbps = Number.parseInt(settings.speedLimitKbps, 10);
   return {
     tabId: sender.tab?.id ?? Number(message.tabId),
@@ -466,14 +476,22 @@ function normalizedDownloadPayload(message, sender) {
     priority,
     resolverPreference,
     cobaltEndpoint: isHttpUrl(settings.cobaltEndpoint) ? settings.cobaltEndpoint : "",
-    cobaltAuthScheme: ["none", "api-key", "bearer"].includes(settings.cobaltAuthScheme)
-      ? settings.cobaltAuthScheme
-      : "none",
-    cobaltAuthToken: String(settings.cobaltAuthToken || ""),
+    cobaltAuthScheme,
+    cobaltAuthToken: cobaltAuthScheme === "none" ? "" : String(settings.cobaltAuthToken || ""),
     speedLimitKbps: Number.isFinite(speedLimitKbps) && speedLimitKbps >= 32
       ? Math.min(speedLimitKbps, 10000000)
       : 0,
-    scheduledAt: String(source.scheduledAt || "").slice(0, 80)
+    scheduledAt: String(source.scheduledAt || "").slice(0, 80),
+    networkStrategy: NETWORK_STRATEGIES.has(settings.networkStrategy)
+      ? settings.networkStrategy
+      : "balanced",
+    authenticationMode: AUTHENTICATION_MODES.has(settings.authenticationMode)
+      ? settings.authenticationMode
+      : "parabolic",
+    proxyMode: PROXY_MODES.has(settings.proxyMode)
+      ? settings.proxyMode
+      : "parabolic",
+    sendPageReferer: settings.sendPageReferer === true
   };
 }
 

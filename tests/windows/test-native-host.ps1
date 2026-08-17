@@ -40,7 +40,7 @@ try {
         type = "hello"
         payload = @{
             extensionId = "parabolic-media-detector@othmanbenbrahim.dev"
-            extensionVersion = "0.6.0"
+            extensionVersion = "0.7.0"
             protocolVersion = 3
         }
     } | ConvertTo-Json -Compress -Depth 5

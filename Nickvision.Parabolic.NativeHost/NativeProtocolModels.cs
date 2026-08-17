@@ -59,6 +59,10 @@ internal sealed class MediaRequest
     public string CobaltAuthToken { get; set; } = string.Empty;
     public int SpeedLimitKbps { get; set; }
     public string ScheduledAt { get; set; } = string.Empty;
+    public string NetworkStrategy { get; set; } = "balanced";
+    public string AuthenticationMode { get; set; } = "parabolic";
+    public string ProxyMode { get; set; } = "parabolic";
+    public bool SendPageReferer { get; set; }
 }
 
 internal sealed class CobaltRequest

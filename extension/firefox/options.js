@@ -10,6 +10,10 @@ const DEFAULT_SETTINGS = {
   cobaltEndpoint: "",
   cobaltAuthScheme: "none",
   speedLimitKbps: 0,
+  networkStrategy: "balanced",
+  authenticationMode: "parabolic",
+  proxyMode: "parabolic",
+  sendPageReferer: false,
   overlayPosition: "top-right",
   fallbackToProtocol: false
 };

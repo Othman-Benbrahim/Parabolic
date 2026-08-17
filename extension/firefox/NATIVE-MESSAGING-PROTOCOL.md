@@ -1,6 +1,6 @@
 # Parabolic Firefox Native Messaging Protocol
 
-This document is the implementation contract between Firefox add-on `0.6.x` and Parabolic `2026.8.2`. Protocol version `3` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe.
+This document is the implementation contract between Firefox add-on `0.7.x` and Parabolic `2026.8.3`. Protocol version `3` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe.
 
 ## Host registration
 
@@ -74,7 +74,7 @@ Request payload:
 ```json
 {
   "extensionId": "parabolic-media-detector@othmanbenbrahim.dev",
-  "extensionVersion": "0.6.0",
+  "extensionVersion": "0.7.0",
   "protocolVersion": 3
 }
 ```
@@ -83,9 +83,9 @@ Response payload:
 
 ```json
 {
-  "appVersion": "2026.8.2",
+  "appVersion": "2026.8.3",
   "protocolVersion": 3,
-  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling"]
+  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
 }
 ```
 
@@ -146,7 +146,11 @@ Request payload:
   "cobaltAuthScheme": "none",
   "cobaltAuthToken": "",
   "speedLimitKbps": 0,
-  "scheduledAt": ""
+  "scheduledAt": "",
+  "networkStrategy": "balanced",
+  "authenticationMode": "parabolic",
+  "proxyMode": "parabolic",
+  "sendPageReferer": false
 }
 ```
 
@@ -185,7 +189,11 @@ The request uses the same payload as `get-formats`. Supported preset values are:
 
 If `formatId` is non-empty, it takes precedence over the preset after the host validates it as a format returned for that URL.
 
-`resolverPreference` accepts `auto`, `yt-dlp`, or `cobalt`. Auto selects an HTTP media URL detected by Firefox first, then yt-dlp, and uses Cobalt only when an endpoint is configured and yt-dlp discovery returns no media. `speedLimitKbps` is `0` for unlimited or a value from 32 through 10,000,000. `scheduledAt` is empty or an ISO 8601 future date no more than one year away. Cobalt URLs are resolved immediately and therefore cannot be scheduled until URL renewal is implemented in step 3.
+`resolverPreference` accepts `auto`, `yt-dlp`, or `cobalt`. Auto selects an HTTP media URL detected by Firefox first, then yt-dlp, and uses Cobalt only when an endpoint is configured and yt-dlp discovery returns no media. `speedLimitKbps` is `0` for unlimited or a value from 32 through 10,000,000. `scheduledAt` is empty or an ISO 8601 future date no more than one year away.
+
+`networkStrategy` accepts `conservative`, `balanced`, or `aggressive` and controls fragment concurrency, socket timeouts, and retry counts. `authenticationMode` accepts `parabolic`, `firefox`, or `none`; Firefox mode is implemented locally by yt-dlp and does not transfer cookie values through Native Messaging. `proxyMode` accepts `parabolic` or `direct`. `sendPageReferer` is explicit and false by default.
+
+Unauthenticated Cobalt tasks may be scheduled: the service stores the stable source and resolves a fresh temporary URL when the task actually starts. Authenticated Cobalt scheduling is rejected because the Cobalt token is deliberately not persisted. Direct temporary media URLs retain a stable-page fallback for HTTP 401/403/410 or signature-expiry failures.
 
 Response payload:
 

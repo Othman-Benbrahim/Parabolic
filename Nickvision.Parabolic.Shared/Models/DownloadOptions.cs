@@ -35,6 +35,17 @@ public class DownloadOptions
     public string SourceKind { get; set; }
     public int? SpeedLimitKbps { get; set; }
     public DateTimeOffset? ScheduledAt { get; set; }
+    public string AuthenticationMode { get; set; }
+    public string ProxyMode { get; set; }
+    public string HttpReferer { get; set; }
+    public int ConcurrentFragments { get; set; }
+    public int NetworkRetries { get; set; }
+    public int SocketTimeoutSeconds { get; set; }
+    public Uri? FallbackUrl { get; set; }
+    public string RenewalMode { get; set; }
+    public Uri? RenewalEndpoint { get; set; }
+    public Uri? RenewalSourceUrl { get; set; }
+    public string RenewalPreset { get; set; }
 
     public DownloadOptions(Uri url)
     {
@@ -65,6 +76,17 @@ public class DownloadOptions
         SourceKind = "page";
         SpeedLimitKbps = null;
         ScheduledAt = null;
+        AuthenticationMode = "parabolic";
+        ProxyMode = "parabolic";
+        HttpReferer = string.Empty;
+        ConcurrentFragments = 8;
+        NetworkRetries = 10;
+        SocketTimeoutSeconds = 20;
+        FallbackUrl = null;
+        RenewalMode = "none";
+        RenewalEndpoint = null;
+        RenewalSourceUrl = null;
+        RenewalPreset = "best";
     }
 
     public string SaveFolder

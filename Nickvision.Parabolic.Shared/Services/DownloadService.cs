@@ -22,6 +22,7 @@ public class DownloadService : IDisposable, IDownloadService
     private readonly IRecoveryService _recoveryService;
     private readonly ITranslationService _translationService;
     private readonly IYtdlpExecutableService _ytdlpService;
+    private readonly IUrlRenewalService _urlRenewalService;
     private readonly Dictionary<int, Download> _downloading;
     private readonly Dictionary<int, Download> _queued;
     private readonly Dictionary<int, Download> _completed;
@@ -39,7 +40,7 @@ public class DownloadService : IDisposable, IDownloadService
     public int QueuedCount => _queued.Count;
     public int CompletedCount => _completed.Count;
 
-    public DownloadService(ILogger<DownloadService> logger, IConfigurationService configurationService, IHistoryService historyService, IRecoveryService recoveryService, ITranslationService translationService, IYtdlpExecutableService ytdlpService)
+    public DownloadService(ILogger<DownloadService> logger, IConfigurationService configurationService, IHistoryService historyService, IRecoveryService recoveryService, ITranslationService translationService, IYtdlpExecutableService ytdlpService, IUrlRenewalService urlRenewalService)
     {
         _logger = logger;
         _configurationService = configurationService;
@@ -47,6 +48,7 @@ public class DownloadService : IDisposable, IDownloadService
         _recoveryService = recoveryService;
         _translationService = translationService;
         _ytdlpService = ytdlpService;
+        _urlRenewalService = urlRenewalService;
         _downloading = new Dictionary<int, Download>();
         _queued = new Dictionary<int, Download>();
         _completed = new Dictionary<int, Download>();
@@ -81,7 +83,7 @@ public class DownloadService : IDisposable, IDownloadService
 
     public async Task<int> AddAsync(DownloadOptions options, bool excludeFromHistory)
     {
-        var download = new Download(_configurationService, _translationService, _ytdlpService, options);
+        var download = new Download(_configurationService, _translationService, _ytdlpService, _urlRenewalService, options);
         _logger.LogDebug($"Adding download ({download.Id}): {JsonSerializer.Serialize(options, ApplicationJsonContext.Default.DownloadOptions)}");
         download.Completed += Download_Completed;
         download.ProgressChanged += Download_ProgressChanged;
@@ -128,7 +130,7 @@ public class DownloadService : IDisposable, IDownloadService
         var downloadsToStart = new List<Download>();
         foreach (var option in options)
         {
-            var download = new Download(_configurationService, _translationService, _ytdlpService, option);
+            var download = new Download(_configurationService, _translationService, _ytdlpService, _urlRenewalService, option);
             ids.Add(download.Id);
             _logger.LogDebug($"Adding download ({download.Id}): {JsonSerializer.Serialize(option, ApplicationJsonContext.Default.DownloadOptions)}");
             download.Completed += Download_Completed;

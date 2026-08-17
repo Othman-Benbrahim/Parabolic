@@ -119,6 +119,52 @@
     </section>
 
     <section>
+      <h2>Network and access</h2>
+      <label class="setting" for="networkStrategy">
+        <span>
+          <strong>Network/CDN strategy</strong>
+          <small>Balanced is recommended. Conservative opens fewer fragment connections; aggressive retries harder.</small>
+        </span>
+        <select id="networkStrategy">
+          <option value="conservative">Conservative</option>
+          <option value="balanced">Balanced</option>
+          <option value="aggressive">Aggressive</option>
+        </select>
+      </label>
+      <label class="setting" for="authenticationMode">
+        <span>
+          <strong>Website authentication</strong>
+          <small>Firefox mode asks yt-dlp to read the local Firefox session. The add-on never extracts or stores cookies.</small>
+        </span>
+        <select id="authenticationMode">
+          <option value="parabolic">Use Parabolic settings</option>
+          <option value="firefox">Use Firefox session</option>
+          <option value="none">No cookies</option>
+        </select>
+      </label>
+      <label class="setting" for="proxyMode">
+        <span>
+          <strong>Proxy route</strong>
+          <small>Use the proxy configured in the Parabolic app, or bypass it for Firefox-started tasks.</small>
+        </span>
+        <select id="proxyMode">
+          <option value="parabolic">Use Parabolic settings</option>
+          <option value="direct">Direct connection</option>
+        </select>
+      </label>
+      <label class="setting toggle-setting" for="sendPageReferer">
+        <span>
+          <strong>Send the page as HTTP referrer</strong>
+          <small>May be required by protected CDNs. Disabled by default to minimize cross-site data sharing.</small>
+        </span>
+        <span class="toggle">
+          <input type="checkbox" id="sendPageReferer">
+          <span class="slider"></span>
+        </span>
+      </label>
+    </section>
+
+    <section>
       <h2>Detection</h2>
       <label class="setting toggle-setting" for="detectMedia">
         <span>

@@ -64,7 +64,7 @@ const browser = {
       nativeHostName = name;
       return nativePort;
     },
-    getManifest() { return { version: "0.6.0" }; },
+    getManifest() { return { version: "0.7.0" }; },
     getURL(value) { return `moz-extension://test/${value}`; },
     onMessage: { addListener(listener) { runtimeMessageListeners.push(listener); } },
     onInstalled: { addListener() {} },
@@ -79,7 +79,11 @@ const browser = {
           resolverPreference: "yt-dlp",
           cobaltEndpoint: "https://cobalt.example/",
           cobaltAuthScheme: "bearer",
-          speedLimitKbps: 2048
+          speedLimitKbps: 2048,
+          networkStrategy: "aggressive",
+          authenticationMode: "firefox",
+          proxyMode: "direct",
+          sendPageReferer: true
         };
       },
       async set() {}
@@ -181,6 +185,10 @@ async function send(message, sender = {}) {
   assert.equal(request.payload.cobaltAuthToken, "local-test-token");
   assert.equal(request.payload.speedLimitKbps, 2048);
   assert.equal(request.payload.scheduledAt, "");
+  assert.equal(request.payload.networkStrategy, "aggressive");
+  assert.equal(request.payload.authenticationMode, "firefox");
+  assert.equal(request.payload.proxyMode, "direct");
+  assert.equal(request.payload.sendPageReferer, true);
 
   const mediaCatalog = await send({ type: "get-media", tabId: 42 }, sender);
   assert.equal(Object.hasOwn(mediaCatalog.settings, "cobaltAuthToken"), false);

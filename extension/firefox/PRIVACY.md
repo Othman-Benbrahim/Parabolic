@@ -1,6 +1,6 @@
 # Privacy Policy for Parabolic Download Manager
 
-Effective date: August 17, 2026
+Effective date: August 18, 2026
 
 Parabolic Download Manager is a Firefox extension that detects downloadable media in web pages and sends user-requested download operations to the Parabolic desktop application through Firefox Native Messaging.
 
@@ -12,6 +12,7 @@ The extension may process the following information in the browser:
 - detected media URLs and basic media information, such as content type;
 - the download preset, quality, format, and priority selected by the user;
 - an optional scheduled start time and bandwidth limit;
+- the chosen network strategy, proxy mode, authentication mode, and optional page-referrer preference;
 - the address and authentication choice for a Cobalt instance configured by the user;
 - the status and identifier of a download;
 - extension preferences stored locally in Firefox.
@@ -27,6 +28,8 @@ The extension also exchanges its extension version and Native Messaging protocol
 To analyze and download the requested media, Parabolic and its download components, including yt-dlp, connect to the website or media provider selected by the user. When the user requests a yt-dlp update check or update, Parabolic contacts the relevant official update source.
 
 If the user explicitly configures Cobalt, the requested page URL and selected quality are sent to that Cobalt instance to obtain a downloadable media URL. If authentication is configured, the token is sent only to that endpoint. Parabolic does not automatically use the official shared Cobalt API.
+
+If the user explicitly selects `Use Firefox session`, the local Parabolic process invokes yt-dlp's Firefox-cookie support. The extension does not read, copy, receive, or transmit the cookie values. If page-referrer forwarding is enabled, the requested page URL is sent as the HTTP `Referer` header only to the selected media provider.
 
 ## Purpose and legal basis
 
@@ -72,7 +75,7 @@ https://github.com/Othman-Benbrahim/Parabolic/releases/latest
 
 # Politique de confidentialité de Parabolic Download Manager
 
-Date d'entrée en vigueur : 17 août 2026
+Date d'entrée en vigueur : 18 août 2026
 
 Parabolic Download Manager est une extension Firefox qui détecte les médias téléchargeables dans les pages Web et transmet les téléchargements demandés par l'utilisateur à l'application de bureau Parabolic au moyen de Firefox Native Messaging.
 
@@ -84,6 +87,7 @@ L'extension peut traiter les informations suivantes dans le navigateur :
 - les adresses des médias détectés et certaines informations techniques, comme leur type de contenu ;
 - le préréglage, la qualité, le format et la priorité choisis par l'utilisateur ;
 - une éventuelle date de démarrage programmée et une limite de bande passante ;
+- la stratégie réseau, le mode proxy, le mode d'authentification et l'éventuelle autorisation d'envoyer la page comme référent HTTP ;
 - l'adresse et le mode d'authentification d'une instance Cobalt configurée par l'utilisateur ;
 - l'état et l'identifiant d'un téléchargement ;
 - les préférences de l'extension enregistrées localement dans Firefox.
@@ -99,6 +103,8 @@ L'extension échange également sa version et la version du protocole Native Mes
 Pour analyser et télécharger le média demandé, Parabolic et ses composants de téléchargement, notamment yt-dlp, se connectent au site ou au fournisseur de médias choisi par l'utilisateur. Lorsque l'utilisateur demande une vérification ou une mise à jour de yt-dlp, Parabolic contacte la source officielle correspondante.
 
 Si l'utilisateur configure explicitement Cobalt, l'adresse de la page demandée et la qualité choisie sont transmises à cette instance Cobalt afin d'obtenir une adresse de média téléchargeable. Si une authentification est configurée, le jeton est envoyé uniquement à ce point d'accès. Parabolic n'utilise pas automatiquement l'API Cobalt partagée officielle.
+
+Si l'utilisateur choisit explicitement « Utiliser la session Firefox », le processus Parabolic local utilise la prise en charge des cookies Firefox de yt-dlp. L'extension ne lit, ne copie, ne reçoit et ne transmet jamais les valeurs des cookies. Si l'envoi du référent HTTP est activé, l'adresse de la page demandée est envoyée comme en-tête `Referer` uniquement au fournisseur du média sélectionné.
 
 ## Finalité du traitement
 

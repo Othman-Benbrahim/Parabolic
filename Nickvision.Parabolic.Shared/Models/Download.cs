@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Nickvision.Parabolic.Shared.Models;
@@ -21,10 +22,13 @@ public partial class Download : IDisposable
     private readonly IConfigurationService _configurationService;
     private readonly ITranslationService _translationService;
     private readonly IYtdlpExecutableService _ytdlpExecutableService;
+    private readonly IUrlRenewalService _urlRenewalService;
     private readonly StringBuilder _logBuilder;
     private bool _removeSourceData;
     private Process? _process;
     private int _progressSkipCounter;
+    private int _processRestartCount;
+    private bool _urlRenewed;
 
     public int Id { get; }
     public DownloadOptions Options { get; }
@@ -40,15 +44,18 @@ public partial class Download : IDisposable
         _nextId = 0;
     }
 
-    public Download(IConfigurationService configurationService, ITranslationService translationService, IYtdlpExecutableService ytdlpExecutableService, DownloadOptions options)
+    public Download(IConfigurationService configurationService, ITranslationService translationService, IYtdlpExecutableService ytdlpExecutableService, IUrlRenewalService urlRenewalService, DownloadOptions options)
     {
         _configurationService = configurationService;
         _translationService = translationService;
         _ytdlpExecutableService = ytdlpExecutableService;
+        _urlRenewalService = urlRenewalService;
         _logBuilder = new StringBuilder();
         _removeSourceData = false;
         _process = null;
         _progressSkipCounter = 0;
+        _processRestartCount = 0;
+        _urlRenewed = false;
         Id = _nextId++;
         Options = options;
         FilePath = Path.Combine(Options.SaveFolder, $"{Options.SaveFilename}{Options.FileType.DotExtension}");
@@ -87,7 +94,7 @@ public partial class Download : IDisposable
         ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, ReadOnlyMemory<char>.Empty, double.NaN, 0.0, 0));
     }
 
-    public void Start()
+    public async void Start()
     {
         if (Status == DownloadStatus.Running || Status == DownloadStatus.Paused)
         {
@@ -102,17 +109,34 @@ public partial class Download : IDisposable
             Completed?.Invoke(this, new DownloadCompletedEventArgs(Id, Status, FilePath, log.AsMemory(), false));
             return;
         }
-        _removeSourceData = _configurationService.RemoveSourceData;
-        _process = _ytdlpExecutableService.GetDownloadProcess(Options);
-        Status = DownloadStatus.Running;
-        _process.Exited += Process_Exited;
-        _process.OutputDataReceived += Process_OutputDataReceived;
-        _process.ErrorDataReceived += Process_OutputDataReceived;
-        _process.Start();
-        _process.SetAsParentProcess();
-        _process.BeginOutputReadLine();
-        _process.BeginErrorReadLine();
-        ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, (_translationService?._("Starting download...") ?? "Starting download...").AsMemory(), double.NaN, 0.0, 0));
+        try
+        {
+            if (!_urlRenewed && !string.Equals(Options.RenewalMode, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, "Renewing temporary media URL...".AsMemory(), double.NaN, 0.0, 0));
+                await _urlRenewalService.RenewAsync(Options, CancellationToken.None);
+                _urlRenewed = true;
+            }
+            _removeSourceData = _configurationService.RemoveSourceData;
+            _process = _ytdlpExecutableService.GetDownloadProcess(Options);
+            Status = DownloadStatus.Running;
+            _process.Exited += Process_Exited;
+            _process.OutputDataReceived += Process_OutputDataReceived;
+            _process.ErrorDataReceived += Process_OutputDataReceived;
+            _process.Start();
+            _process.SetAsParentProcess();
+            _process.BeginOutputReadLine();
+            _process.BeginErrorReadLine();
+            ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, (_translationService?._("Starting download...") ?? "Starting download...").AsMemory(), double.NaN, 0.0, 0));
+        }
+        catch (Exception exception)
+        {
+            var log = $"Unable to start download: {exception.Message}";
+            _logBuilder.AppendLine(log);
+            Status = DownloadStatus.Error;
+            ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, log.AsMemory(), double.NaN, 0.0, 0));
+            Completed?.Invoke(this, new DownloadCompletedEventArgs(Id, Status, FilePath, log.AsMemory(), false));
+        }
     }
 
     public void Stop()
@@ -218,6 +242,10 @@ public partial class Download : IDisposable
             }
             catch { }
         }
+        else if (Status == DownloadStatus.Error && await TryRestartAfterNetworkFailureAsync())
+        {
+            return;
+        }
         ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, ReadOnlyMemory<char>.Empty));
         Completed?.Invoke(this, new DownloadCompletedEventArgs(Id, Status, FilePath, Log.AsMemory(), true));
         if (_process is not null)
@@ -228,6 +256,67 @@ public partial class Download : IDisposable
             _process.Dispose();
             _process = null;
         }
+    }
+
+    private async Task<bool> TryRestartAfterNetworkFailureAsync()
+    {
+        const int maxProcessRestarts = 2;
+        if (_processRestartCount >= maxProcessRestarts)
+        {
+            return false;
+        }
+
+        var log = _logBuilder.ToString();
+        var temporaryUrlFailure = log.Contains("HTTP Error 401", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("HTTP Error 410", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("URL expired", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("signature", StringComparison.OrdinalIgnoreCase);
+        var retryableNetworkFailure = temporaryUrlFailure
+            || log.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("connection reset", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("connection refused", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("temporary failure", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("network is unreachable", StringComparison.OrdinalIgnoreCase);
+        if (!retryableNetworkFailure)
+        {
+            return false;
+        }
+
+        if (temporaryUrlFailure && Options.FallbackUrl is not null)
+        {
+            Options.Url = Options.FallbackUrl;
+            Options.ResolverName = "yt-dlp-refresh";
+            Options.RenewalMode = "none";
+        }
+        else if (string.Equals(Options.RenewalMode, "cobalt", StringComparison.OrdinalIgnoreCase))
+        {
+            _urlRenewed = false;
+        }
+
+        _processRestartCount++;
+        var delay = TimeSpan.FromSeconds(Math.Min(15, 1 << _processRestartCount));
+        var message = $"Network/CDN retry {_processRestartCount}/{maxProcessRestarts} in {delay.TotalSeconds:0} seconds...";
+        _logBuilder.AppendLine(message);
+        ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, message.AsMemory(), double.NaN, 0.0, 0));
+        DisposeProcess();
+        Status = DownloadStatus.Queued;
+        await Task.Delay(delay);
+        Start();
+        return true;
+    }
+
+    private void DisposeProcess()
+    {
+        if (_process is null)
+        {
+            return;
+        }
+        _process.Exited -= Process_Exited;
+        _process.ErrorDataReceived -= Process_OutputDataReceived;
+        _process.OutputDataReceived -= Process_OutputDataReceived;
+        _process.Dispose();
+        _process = null;
     }
 
     private async void Process_OutputDataReceived(object? sender, DataReceivedEventArgs e)

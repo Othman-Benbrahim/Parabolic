@@ -102,8 +102,8 @@ public sealed class NativeMessagingServer : IDisposable
                 case "hello":
                     await SendSuccessAsync(request.RequestId, new HelloResponse
                     {
-                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.2",
-                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling"]
+                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.3",
+                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
                     }, NativeJsonContext.Default.HelloResponse, cancellationToken);
                     break;
                 case "get-formats":
@@ -265,6 +265,8 @@ public sealed class NativeMessagingServer : IDisposable
         var mediaRequest = DeserializePayload(request, NativeJsonContext.Default.MediaRequest);
         ValidatePreset(mediaRequest.Preset);
         ValidateResolverPreference(mediaRequest.ResolverPreference);
+        ValidateNetworkControls(mediaRequest);
+        var scheduledAt = ParseScheduledAt(mediaRequest.ScheduledAt);
         var externalId = ($"download-{Guid.NewGuid():N}")[..21];
         DownloadOptions options;
         if (!string.IsNullOrWhiteSpace(mediaRequest.FormatId))
@@ -288,18 +290,13 @@ public sealed class NativeMessagingServer : IDisposable
         }
         else
         {
-            options = await ResolveQuickDownloadOptionsAsync(mediaRequest, cancellationToken);
+            options = await ResolveQuickDownloadOptionsAsync(mediaRequest, scheduledAt, cancellationToken);
         }
 
         options.Priority = ParsePriority(mediaRequest.Priority);
         options.SpeedLimitKbps = ParseSpeedLimit(mediaRequest.SpeedLimitKbps);
-        options.ScheduledAt = ParseScheduledAt(mediaRequest.ScheduledAt);
-        if (options.ScheduledAt.HasValue && options.ResolverName == "cobalt")
-        {
-            throw new NativeRequestException(
-                "COBALT_SCHEDULING_UNSUPPORTED",
-                "Schedule this download with yt-dlp or direct media. Deferred Cobalt URL renewal arrives in step 3.");
-        }
+        options.ScheduledAt = scheduledAt;
+        ApplyNetworkControls(options, mediaRequest);
         var snapshot = await _downloadCoordinator.EnqueueAsync(
             options,
             externalId,
@@ -318,6 +315,7 @@ public sealed class NativeMessagingServer : IDisposable
 
     private async Task<DownloadOptions> ResolveQuickDownloadOptionsAsync(
         MediaRequest request,
+        DateTimeOffset? scheduledAt,
         CancellationToken cancellationToken)
     {
         if (request.ResolverPreference == "auto")
@@ -325,12 +323,20 @@ public sealed class NativeMessagingServer : IDisposable
             var direct = await _directResolver.ResolveAsync(request, cancellationToken);
             if (direct is not null)
             {
+                if (scheduledAt.HasValue && LooksTemporaryUrl(direct.Url) && TryGetStablePageUrl(request, out _))
+                {
+                    return BuildDirectDownloadOptions(request);
+                }
                 return BuildResolvedDownloadOptions(request, direct);
             }
         }
 
         if (request.ResolverPreference == "cobalt")
         {
+            if (scheduledAt.HasValue)
+            {
+                return BuildDeferredCobaltOptions(request);
+            }
             var cobalt = await _cobaltResolver.ResolveAsync(request, cancellationToken)
                 ?? throw new NativeRequestException(
                     "COBALT_NOT_CONFIGURED",
@@ -357,6 +363,33 @@ public sealed class NativeMessagingServer : IDisposable
         }
 
         return BuildDirectDownloadOptions(request);
+    }
+
+    private DownloadOptions BuildDeferredCobaltOptions(MediaRequest request)
+    {
+        if (!string.Equals(request.CobaltAuthScheme, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NativeRequestException(
+                "COBALT_SCHEDULE_AUTH_UNSUPPORTED",
+                "Authenticated Cobalt tasks cannot be scheduled because Parabolic never stores the Cobalt token. Use an unauthenticated authorized instance or start the task immediately.");
+        }
+        if (!DirectMediaResolver.TryCreateHttpUri(request.CobaltEndpoint, out var endpoint))
+        {
+            throw new NativeRequestException(
+                "COBALT_NOT_CONFIGURED",
+                "Configure a self-hosted Cobalt API endpoint in the Firefox add-on settings.");
+        }
+        if (!TryGetStablePageUrl(request, out var source))
+        {
+            throw new NativeRequestException("INVALID_URL", "A scheduled Cobalt task requires a stable HTTP or HTTPS page URL.");
+        }
+        var options = BuildResolvedDownloadOptions(request, new ResolvedMedia(source, request.Title, "cobalt-deferred", "cobalt"));
+        options.RenewalMode = "cobalt";
+        options.RenewalEndpoint = endpoint;
+        options.RenewalSourceUrl = source;
+        options.RenewalPreset = request.Preset;
+        options.FallbackUrl = source;
+        return options;
     }
 
     private async Task HandleCancelAsync(NativeRequest request, CancellationToken cancellationToken)
@@ -488,6 +521,10 @@ public sealed class NativeMessagingServer : IDisposable
             SourceKind = resolved.SourceKind
         };
         ApplyPreset(options, request.Preset, isAudio);
+        if (TryGetStablePageUrl(request, out var pageUrl) && pageUrl != resolved.Url)
+        {
+            options.FallbackUrl = pageUrl;
+        }
         return options;
     }
 
@@ -528,6 +565,10 @@ public sealed class NativeMessagingServer : IDisposable
         };
 
         options.FormatSelector = selectedFormat.Selector;
+        if (discovery.SourceUrl != url)
+        {
+            options.FallbackUrl = discovery.SourceUrl;
+        }
         return options;
     }
 
@@ -547,6 +588,61 @@ public sealed class NativeMessagingServer : IDisposable
             "480" => new VideoResolution(854, 480),
             _ => VideoResolution.Best
         };
+    }
+
+    private static void ApplyNetworkControls(DownloadOptions options, MediaRequest request)
+    {
+        options.AuthenticationMode = request.AuthenticationMode;
+        options.ProxyMode = request.ProxyMode;
+        if (request.SendPageReferer && TryGetStablePageUrl(request, out var referer))
+        {
+            options.HttpReferer = referer.AbsoluteUri;
+        }
+        (options.ConcurrentFragments, options.NetworkRetries, options.SocketTimeoutSeconds) = request.NetworkStrategy switch
+        {
+            "conservative" => (4, 6, 30),
+            "aggressive" => (16, 20, 15),
+            _ => (8, 10, 20)
+        };
+    }
+
+    private static void ValidateNetworkControls(MediaRequest request)
+    {
+        if (request.NetworkStrategy is not ("conservative" or "balanced" or "aggressive"))
+        {
+            throw new NativeRequestException("INVALID_NETWORK_STRATEGY", "Network strategy must be conservative, balanced, or aggressive.");
+        }
+        if (request.AuthenticationMode is not ("parabolic" or "firefox" or "none"))
+        {
+            throw new NativeRequestException("INVALID_AUTHENTICATION_MODE", "Authentication mode must be Parabolic settings, Firefox cookies, or none.");
+        }
+        if (request.ProxyMode is not ("parabolic" or "direct"))
+        {
+            throw new NativeRequestException("INVALID_PROXY_MODE", "Proxy mode must use Parabolic settings or a direct connection.");
+        }
+    }
+
+    private static bool TryGetStablePageUrl(MediaRequest request, out Uri uri)
+    {
+        if (DirectMediaResolver.TryCreateHttpUri(request.PageUrl, out uri)
+            || DirectMediaResolver.TryCreateHttpUri(request.FrameUrl, out uri))
+        {
+            return true;
+        }
+        uri = null!;
+        return false;
+    }
+
+    private static bool LooksTemporaryUrl(Uri uri)
+    {
+        var query = uri.Query;
+        return query.Contains("expire=", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("expires=", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("signature=", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("sig=", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("token=", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("policy=", StringComparison.OrdinalIgnoreCase)
+            || query.Contains("x-amz-expires=", StringComparison.OrdinalIgnoreCase);
     }
 
     private void EnsureFormatChoices(CachedDiscovery discovery)

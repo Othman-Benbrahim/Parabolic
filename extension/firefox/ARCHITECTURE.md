@@ -1,6 +1,6 @@
 # Parabolic Download Manager for Firefox
 
-Version `0.6.0` uses protocol v3 and the persistent Parabolic download service. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path and Firefox may be closed after a task is accepted.
+Version `0.7.0` uses protocol v3 and the persistent Parabolic download service. It is intentionally Firefox-only. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path and Firefox may be closed after a task is accepted.
 
 ## Target user flow
 
@@ -62,7 +62,7 @@ The add-on requests the native application name:
 com.nickvision.parabolic
 ```
 
-The adapted desktop source contains a small `Nickvision.Parabolic.NativeHost` relay and `Nickvision.Parabolic.DownloadService`. The service routes detected MP4, HLS, and DASH URLs directly, uses yt-dlp for general discovery, and can use an explicitly configured self-hosted Cobalt instance as a fallback. It owns scheduled and active downloads after Firefox disconnects, enforces per-task bandwidth limits, relays progress, accepts pause/resume/cancel/priority commands, and can reveal a completed file in Explorer.
+The adapted desktop source contains a small `Nickvision.Parabolic.NativeHost` relay and `Nickvision.Parabolic.DownloadService`. The service routes detected MP4, HLS, and DASH URLs directly, uses yt-dlp for general discovery, and can use an explicitly configured self-hosted Cobalt instance as a fallback. It owns scheduled and active downloads after Firefox disconnects, renews unauthenticated Cobalt URLs at the actual scheduled start, falls back to stable page URLs after temporary CDN links expire, applies the selected retry/fragment strategy, enforces per-task bandwidth limits, relays progress, accepts pause/resume/cancel/priority commands, and can reveal a completed file in Explorer.
 
 The Windows installer publishes the host beside Parabolic, writes its absolute-path JSON manifest, and registers `com.nickvision.parabolic` for both 32-bit and 64-bit Firefox registry views. The host does not activate the WinUI window during the normal flow.
 
@@ -82,7 +82,9 @@ Firefox owns only the temporary relay connection. Accepted downloads continue in
 - Native requests accept only HTTP and HTTPS page/media URLs.
 - Titles, format IDs and source-kind fields are length-limited before leaving the extension.
 - Page-controlled JavaScript cannot call Native Messaging directly; requests pass through the isolated content script and background validation.
-- Cookies are not collected or transmitted by this version.
+- The add-on never reads, copies, or transmits cookie values. When the user selects `Use Firefox session`, the local Parabolic process asks yt-dlp to read Firefox's cookie database directly.
+- HTTP referrer forwarding is disabled by default and can be enabled for CDNs that require it.
+- Proxy use is inherited from Parabolic unless the user explicitly selects a direct connection.
 - A Cobalt token is stored only in Firefox local storage, is sent only to the configured Cobalt endpoint, and is never stored in Parabolic's recovery queue.
 - The official shared Cobalt API is not configured automatically; the user must provide an instance they operate or are authorized to use.
 - DRM decryption is outside the project scope.

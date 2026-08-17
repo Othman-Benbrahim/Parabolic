@@ -18,8 +18,12 @@ public static class HostApplicationBuilderExtensions
         {
             var appInfo = new AppInfo("org.nickvision.tubeconverter", "Nickvision Parabolic", "Parabolic")
             {
-                Version = new AppVersion("2026.8.2"),
+                Version = new AppVersion("2026.8.3"),
                 Changelog = """
+                - Added renewal of temporary Cobalt URLs when scheduled downloads actually start
+                - Added stable-page fallback when direct CDN URLs expire
+                - Added conservative, balanced, and aggressive network/CDN retry strategies
+                - Added Firefox-session authentication and per-task proxy bypass controls
                 - Added modular direct, yt-dlp, and optional Cobalt media resolution
                 - Added direct MP4, HLS, and DASH routing from Firefox detections
                 - Added persistent scheduled downloads and per-download bandwidth limits
@@ -58,6 +62,7 @@ public static class HostApplicationBuilderExtensions
             builder.Services.AddSingleton<IRecoveryService, RecoveryService>();
             builder.Services.AddSingleton<IThumbnailService, ThumbnailService>();
             builder.Services.AddSingleton<IYtdlpExecutableService, YtdlpExecutableService>();
+            builder.Services.AddSingleton<IUrlRenewalService, UrlRenewalService>();
             builder.Services.AddTransient<AddDownloadDialogController>();
             builder.Services.AddTransient<HistoryViewController>();
             builder.Services.AddTransient<KeyringViewController>();

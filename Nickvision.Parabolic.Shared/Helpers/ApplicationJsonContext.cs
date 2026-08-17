@@ -1,5 +1,6 @@
 ﻿using Nickvision.Desktop.Application;
 using Nickvision.Parabolic.Shared.Models;
+using Nickvision.Parabolic.Shared.Services;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -15,6 +16,7 @@ namespace Nickvision.Parabolic.Shared.Helpers;
 [JsonSerializable(typeof(List<PostProcessorArgument>))]
 [JsonSerializable(typeof(List<SubtitleLanguage>))]
 [JsonSerializable(typeof(VideoResolution))]
+[JsonSerializable(typeof(UrlRenewalRequest))]
 [JsonSerializable(typeof(WindowGeometry))]
 public partial class ApplicationJsonContext : JsonSerializerContext
 {

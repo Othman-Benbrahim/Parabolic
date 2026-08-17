@@ -60,6 +60,14 @@
     <display_length compare="ge">360</display_length>
   </requires>
   <releases>
+    <release version="2026.8.3" date="2026-08-18">
+      <description translate="no">
+        <p>- Added scheduled Cobalt URL renewal and stable-page fallback for expired CDN links</p>
+        <p>- Added conservative, balanced, and aggressive network retry strategies</p>
+        <p>- Added opt-in Firefox-session authentication and proxy bypass controls</p>
+        <p>- Finalized the Firefox-only download-manager roadmap</p>
+      </description>
+    </release>
     <release version="2026.8.2" date="2026-08-17">
       <description translate="no">
         <p>- Added modular direct, yt-dlp, and optional self-hosted Cobalt resolvers</p>

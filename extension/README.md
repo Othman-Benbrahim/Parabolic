@@ -9,6 +9,9 @@
 - **Scheduled Downloads**: Queue a future start time that is persisted by the Windows service.
 - **Resolver Pipeline**: Direct MP4/HLS/DASH streams are preferred, yt-dlp remains the general resolver, and a self-hosted Cobalt endpoint can be configured as a fallback.
 - **Bandwidth Limit**: Apply a KiB/s limit to each new browser task.
+- **Temporary URL Renewal**: Resolve scheduled Cobalt links at start time and fall back to the stable page when a direct CDN link expires.
+- **Network/CDN Strategies**: Choose conservative, balanced, or aggressive fragment concurrency and retries.
+- **Controlled Access**: Explicitly inherit Parabolic cookies/proxy settings, use the local Firefox session, or disable them for a task.
 - **Context Menu Integration**: Right-click and select: `Open link in Parabolic` on any specific link to send that exact URL without needing to open the page. Otherwise, use the current tab's URL.
 - **Keyboard shortcut**: Press `Alt` + `P` to send the URL of your active tab to Parabolic.
 - **Lightweight & Fast**: Designed to be fast, unobtrusive, easy to use, and respects your privacy.
@@ -17,15 +20,7 @@
 - **YouTube Adaptive Detection**: Firefox recognizes YouTube's `googlevideo.com` media traffic and groups audio/video requests under the stable watch-page URL.
 - **Compatibility Mode**: The old `parabolic://` integration remains available as an explicit fallback while the native bridge is unavailable.
 
-# Installation
-> [!NOTE]  
-> The Parabolic Extension should be available on the Chrome Web Store soon. In the meantime, use the Local Installation. 
-#### Chrome Local Install
-1. Go to: `chrome://extensions`.
-2. Enable `Developer mode`.
-3. Click the `Load unpacked` button and select the extension folder.
-
-##### Firefox
+# Installation — Firefox
 [![get-the-addon](resources/firefox.png)](https://addons.mozilla.org/en-US/firefox/addon/parabolic/)
 
-The enhanced Firefox-only detector is documented in [`firefox/ARCHITECTURE.md`](firefox/ARCHITECTURE.md). It can be loaded temporarily from `about:debugging` by selecting `firefox/manifest.json`.
+The enhanced detector is Firefox-only and documented in [`firefox/ARCHITECTURE.md`](firefox/ARCHITECTURE.md). It can be loaded temporarily from `about:debugging` by selecting `firefox/manifest.json`. The legacy Chromium source directory is not built or supported by this roadmap.

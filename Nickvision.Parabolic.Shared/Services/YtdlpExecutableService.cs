@@ -278,17 +278,45 @@ public class YtdlpExecutableService : DependencyExecutableService, IYtdlpExecuta
             arguments.Add("--limit-rate");
             arguments.Add($"{speedLimit.Value}K");
         }
-        if (!string.IsNullOrEmpty(_configurationService.ProxyUrl))
+        var retries = Math.Clamp(downloadOptions.NetworkRetries, 1, 100);
+        var socketTimeout = Math.Clamp(downloadOptions.SocketTimeoutSeconds, 5, 300);
+        arguments.Add("--retries");
+        arguments.Add(retries.ToString(CultureInfo.InvariantCulture));
+        arguments.Add("--fragment-retries");
+        arguments.Add(retries.ToString(CultureInfo.InvariantCulture));
+        arguments.Add("--retry-sleep");
+        arguments.Add("http:exp=1:20");
+        arguments.Add("--retry-sleep");
+        arguments.Add("fragment:exp=1:20");
+        arguments.Add("--socket-timeout");
+        arguments.Add(socketTimeout.ToString(CultureInfo.InvariantCulture));
+        arguments.Add("--concurrent-fragments");
+        arguments.Add(Math.Clamp(downloadOptions.ConcurrentFragments, 1, 32).ToString(CultureInfo.InvariantCulture));
+        if (Uri.TryCreate(downloadOptions.HttpReferer, UriKind.Absolute, out var referer)
+            && (referer.Scheme == Uri.UriSchemeHttp || referer.Scheme == Uri.UriSchemeHttps))
+        {
+            arguments.Add("--referer");
+            arguments.Add(referer.AbsoluteUri);
+        }
+        if (!string.Equals(downloadOptions.ProxyMode, "direct", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrEmpty(_configurationService.ProxyUrl))
         {
             arguments.Add("--proxy");
             arguments.Add(_configurationService.ProxyUrl);
         }
-        if (_configurationService.CookiesBrowser != Browser.None)
+        if (string.Equals(downloadOptions.AuthenticationMode, "firefox", StringComparison.OrdinalIgnoreCase))
+        {
+            arguments.Add("--cookies-from-browser");
+            arguments.Add("firefox");
+        }
+        else if (!string.Equals(downloadOptions.AuthenticationMode, "none", StringComparison.OrdinalIgnoreCase)
+            && _configurationService.CookiesBrowser != Browser.None)
         {
             arguments.Add("--cookies-from-browser");
             arguments.Add(CookiesFromBrowserArgument);
         }
-        else if (File.Exists(_configurationService.CookiesPath))
+        else if (!string.Equals(downloadOptions.AuthenticationMode, "none", StringComparison.OrdinalIgnoreCase)
+            && File.Exists(_configurationService.CookiesPath))
         {
             arguments.Add("--cookies");
             arguments.Add(_configurationService.CookiesPath);
@@ -362,8 +390,6 @@ public class YtdlpExecutableService : DependencyExecutableService, IYtdlpExecuta
                 ariaArguments += $" --max-overall-download-limit={speedLimit.Value}K";
             }
             arguments.Add(ariaArguments);
-            arguments.Add("--concurrent-fragments");
-            arguments.Add("8");
         }
         if (downloadOptions.Credential is not null)
         {
