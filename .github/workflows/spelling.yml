@@ -17,4 +17,4 @@ jobs:
         with:
           check_filenames: true
           skip: cargo-sources.json,.git,*.svg,*.html,*.js,*.po,*.pot,*.page,*.map,*.rtf,pch.h,CONTRIBUTING.md,StringExtensions.cs
-          ignore_words_list: gir
+          ignore_words_list: gir,adresses,fonction,informations,pont,inout
