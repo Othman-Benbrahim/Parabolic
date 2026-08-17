@@ -8,16 +8,18 @@ public class DownloadAddedEventArgs : DownloadEventArgs
     public string Path { get; }
     public Uri Url { get; }
     public DownloadStatus Status { get; }
+    public DownloadOptions? Options { get; }
 
     public DownloadAddedEventArgs(int id, string path, Uri url, DownloadStatus status) : base(id)
     {
         Path = path;
         Url = url;
         Status = status;
+        Options = null;
     }
 
     public DownloadAddedEventArgs(Download download) : this(download.Id, download.FilePath, download.Options.Url, download.Status)
     {
-
+        Options = download.Options;
     }
 }

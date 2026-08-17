@@ -22,13 +22,14 @@ public interface IDownloadService
 
     int RemainingCount => DownloadingCount + QueuedCount;
 
-    Task AddAsync(DownloadOptions options, bool excludeFromHistory);
-    Task AddAsync(IReadOnlyList<DownloadOptions> options, bool excludeFromHistory);
+    Task<int> AddAsync(DownloadOptions options, bool excludeFromHistory);
+    Task<IReadOnlyList<int>> AddAsync(IReadOnlyList<DownloadOptions> options, bool excludeFromHistory);
     IReadOnlyList<int> ClearCompleted();
     IReadOnlyList<int> ClearQueued();
     bool Pause(int id);
     Task RecoverAllAsync();
     bool Resume(int id);
+    Task<bool> SetPriorityAsync(int id, DownloadPriority priority);
     Task<bool> RetryAsync(int id);
     Task RetryFailedAsync();
     Task<bool> StopAsync(int id);

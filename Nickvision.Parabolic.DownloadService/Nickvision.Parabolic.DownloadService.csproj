@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Nickvision.Parabolic.DownloadService</RootNamespace>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <Version>2026.8.1</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nickvision.Parabolic.Shared\Nickvision.Parabolic.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Nickvision.Parabolic.NativeHost\DaemonProtocol.cs" Link="Bridge\DaemonProtocol.cs" />
+    <Compile Include="..\Nickvision.Parabolic.NativeHost\NativeMessagingServer.cs" Link="Bridge\NativeMessagingServer.cs" />
+    <Compile Include="..\Nickvision.Parabolic.NativeHost\NativeMessagingTransport.cs" Link="Bridge\NativeMessagingTransport.cs" />
+    <Compile Include="..\Nickvision.Parabolic.NativeHost\NativeProtocolModels.cs" Link="Bridge\NativeProtocolModels.cs" />
+    <Compile Include="..\Nickvision.Parabolic.NativeHost\NativeRequestException.cs" Link="Bridge\NativeRequestException.cs" />
+    <Compile Include="..\Nickvision.Parabolic.NativeHost\PersistentDownloadCoordinator.cs" Link="Bridge\PersistentDownloadCoordinator.cs" />
+  </ItemGroup>
+
+</Project>

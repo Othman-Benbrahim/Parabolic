@@ -5,6 +5,7 @@ const DEFAULT_SETTINGS = {
   showMediaBadge: true,
   showOverlay: true,
   quickDownloadPreset: "best",
+  defaultPriority: "normal",
   overlayPosition: "top-right",
   fallbackToProtocol: false
 };

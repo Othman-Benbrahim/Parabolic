@@ -5,14 +5,14 @@ const DEFAULT_SETTINGS = {
   showMediaBadge: true,
   showOverlay: true,
   quickDownloadPreset: "best",
+  defaultPriority: "normal",
   overlayPosition: "top-right",
   fallbackToProtocol: false
 };
 
 const NATIVE_HOST_NAME = "com.nickvision.parabolic";
-const NATIVE_PROTOCOL_VERSION = 1;
+const NATIVE_PROTOCOL_VERSION = 2;
 const NATIVE_REQUEST_TIMEOUT = 8000;
-const NATIVE_PULSE_DELAY = 2000;
 const MAX_MEDIA_PER_TAB = 60;
 const MEDIA_EXTENSIONS = new Set([
   "mp4", "webm", "mov", "m4v", "mkv", "avi",
@@ -26,6 +26,7 @@ const HLS_MIME_TYPES = new Set([
   "audio/x-mpegurl"
 ]);
 const DOWNLOAD_PRESETS = new Set(["best", "1080", "720", "480", "audio"]);
+const DOWNLOAD_PRIORITIES = new Set(["high", "normal", "low"]);
 
 const mediaByTab = new Map();
 const downloadTabs = new Map();
@@ -179,15 +180,8 @@ function nativeHelloPayload() {
   };
 }
 
-async function pulseNativeBridge(count = 2) {
-  let response = null;
-  for (let index = 0; index < count; index += 1) {
-    response = await nativeBridge.request("hello", nativeHelloPayload(), 3000);
-    if (index + 1 < count) {
-      await new Promise((resolve) => setTimeout(resolve, NATIVE_PULSE_DELAY));
-    }
-  }
-  return response;
+async function pulseNativeBridge() {
+  return nativeBridge.request("hello", nativeHelloPayload(), 3000);
 }
 
 function isHttpUrl(value) {
@@ -445,6 +439,12 @@ function normalizedDownloadPayload(message, sender) {
   const preset = DOWNLOAD_PRESETS.has(source.preset)
     ? source.preset
     : fallbackPreset;
+  const fallbackPriority = DOWNLOAD_PRIORITIES.has(settings.defaultPriority)
+    ? settings.defaultPriority
+    : "normal";
+  const priority = DOWNLOAD_PRIORITIES.has(source.priority)
+    ? source.priority
+    : fallbackPriority;
   return {
     tabId: sender.tab?.id ?? Number(message.tabId),
     pageUrl: processedPageUrl,
@@ -453,7 +453,8 @@ function normalizedDownloadPayload(message, sender) {
     preset,
     formatId: String(source.formatId || "").slice(0, 200),
     sourceKind: String(source.sourceKind || "page").slice(0, 40),
-    frameUrl: processedFrameUrl
+    frameUrl: processedFrameUrl,
+    priority
   };
 }
 
@@ -466,9 +467,6 @@ async function requestNativeDownload(message, sender) {
     if (downloadId && Number.isInteger(payload.tabId)) {
       downloadTabs.set(downloadId, payload.tabId);
     }
-    // The working manual sequence probes the host twice around the quality
-    // selection. Reproduce both pulses after enqueueing so one click is enough.
-    await pulseNativeBridge(2).catch(() => undefined);
     return {
       ok: true,
       mode: "native",
@@ -548,6 +546,20 @@ async function probeNativeBridge() {
   }
 }
 
+async function syncNativeDownloads() {
+  try {
+    const response = await nativeBridge.request("list-downloads", {}, 5000);
+    for (const download of response.payload?.downloads || []) {
+      if (download.downloadId && Number.isInteger(download.tabId)) {
+        downloadTabs.set(download.downloadId, download.tabId);
+      }
+    }
+    return response.payload?.downloads || [];
+  } catch (_) {
+    return [];
+  }
+}
+
 async function createContextMenu() {
   try {
     await browser.contextMenus.remove("openParabolicLink");
@@ -571,7 +583,10 @@ async function initializeBackground() {
   await loadSettings();
   await createContextMenu();
   // Start and keep the native host ready before the user's first download click.
-  await probeNativeBridge();
+  const bridge = await probeNativeBridge();
+  if (bridge.available) {
+    await syncNativeDownloads();
+  }
 }
 
 browser.runtime.onInstalled.addListener(async () => {
@@ -673,7 +688,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 
   if (message.type === "bridge-pulse") {
     try {
-      const response = await pulseNativeBridge(2);
+      const response = await pulseNativeBridge();
       return { ok: true, available: true, host: response.payload || response };
     } catch (error) {
       return { ok: false, available: false, error: serializableError(error, "Unable to reactivate the Parabolic bridge.") };
@@ -704,6 +719,30 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       return { ok: true, result: response.payload || response };
     } catch (error) {
       return { ok: false, error: serializableError(error, "Unable to cancel the download.") };
+    }
+  }
+
+  if (message.type === "native-pause" || message.type === "native-resume") {
+    try {
+      const response = await nativeBridge.request(
+        message.type === "native-pause" ? "pause" : "resume",
+        { downloadId: message.downloadId }
+      );
+      return { ok: true, result: response.payload || response };
+    } catch (error) {
+      return { ok: false, error: serializableError(error, "Unable to change the download state.") };
+    }
+  }
+
+  if (message.type === "native-set-priority") {
+    try {
+      const response = await nativeBridge.request("set-priority", {
+        downloadId: message.downloadId,
+        priority: message.priority
+      });
+      return { ok: true, result: response.payload || response };
+    } catch (error) {
+      return { ok: false, error: serializableError(error, "Unable to change the download priority.") };
     }
   }
 

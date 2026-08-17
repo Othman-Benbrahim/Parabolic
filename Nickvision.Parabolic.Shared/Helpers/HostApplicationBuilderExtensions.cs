@@ -18,8 +18,13 @@ public static class HostApplicationBuilderExtensions
         {
             var appInfo = new AppInfo("org.nickvision.tubeconverter", "Nickvision Parabolic", "Parabolic")
             {
-                Version = new AppVersion("2026.8.0"),
+                Version = new AppVersion("2026.8.1"),
                 Changelog = """
+                - Added a persistent Windows download service that survives Firefox shutdown
+                - Added high, normal, and low download queue priorities
+                - Added a separate SQLite recovery queue for browser downloads
+                - Added pause, resume, priority, and active-download synchronization commands
+                - Replaced the long-running Firefox Native Host with a lightweight named-pipe relay
                 - Added the Firefox Native Messaging bridge
                 - Added background downloads started directly from a video player
                 - Added Firefox format discovery, progress, cancellation, and open-folder commands

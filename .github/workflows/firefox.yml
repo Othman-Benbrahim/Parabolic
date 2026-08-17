@@ -34,11 +34,11 @@ jobs:
         working-directory: extension/firefox
         run: |
           version=$(node -p "require('./manifest.json').version")
-          zip -r "../../parabolic-media-detector-${version}-unsigned.xpi" \
+          zip -r "../../parabolic-download-manager-${version}-unsigned.xpi" \
             manifest.json background.js utils.js media-detector.js \
             media-overlay.js popup.html popup.css popup.js \
             options.html options.css options.js icons
       - uses: actions/upload-artifact@v4
         with:
-          name: parabolic-media-detector-firefox
-          path: parabolic-media-detector-*-unsigned.xpi
+          name: parabolic-download-manager-firefox
+          path: parabolic-download-manager-*-unsigned.xpi

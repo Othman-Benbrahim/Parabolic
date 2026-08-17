@@ -27,6 +27,10 @@ public class DownloadOptions
     public double? AudioBitrate { get; set; }
     public string FormatSelector { get; set; }
     public bool UseSleepPreset { get; set; }
+    public bool KeepPartialFiles { get; set; }
+    public DownloadPriority Priority { get; set; }
+    public string ClientRequestId { get; set; }
+    public int ClientTabId { get; set; }
 
     public DownloadOptions(Uri url)
     {
@@ -49,6 +53,10 @@ public class DownloadOptions
         AudioBitrate = null;
         FormatSelector = string.Empty;
         UseSleepPreset = true;
+        KeepPartialFiles = false;
+        Priority = DownloadPriority.Normal;
+        ClientRequestId = string.Empty;
+        ClientTabId = -1;
     }
 
     public string SaveFolder

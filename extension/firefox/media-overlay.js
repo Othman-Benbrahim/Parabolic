@@ -4,6 +4,7 @@
     detectMedia: true,
     showOverlay: true,
     quickDownloadPreset: "best",
+    defaultPriority: "normal",
     overlayPosition: "top-right"
   };
   const PRESETS = [
@@ -264,6 +265,7 @@
         || "Media",
       preset,
       formatId,
+      priority: settings.defaultPriority,
       sourceKind: mediaUrl ? "html5" : "page"
     };
   }

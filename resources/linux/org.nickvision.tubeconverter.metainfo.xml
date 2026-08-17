@@ -60,6 +60,14 @@
     <display_length compare="ge">360</display_length>
   </requires>
   <releases>
+    <release version="2026.8.1" date="2026-08-17">
+      <description translate="no">
+        <p>- Added the first persistent download-manager architecture milestone on Windows</p>
+        <p>- Added SQLite browser recovery and high, normal, and low queue priorities</p>
+        <p>- Added pause, resume, priority, and active-download synchronization protocol commands</p>
+        <p>- Updated the Firefox add-on to protocol v2 and removed the previous double-handshake delay</p>
+      </description>
+    </release>
     <release version="2026.8.0" date="2026-08-14">
       <description translate="no">
         <p>- Added a Firefox in-player download interface backed by Native Messaging on Windows</p>

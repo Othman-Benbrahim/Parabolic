@@ -1,6 +1,6 @@
 # Privacy Policy for Parabolic Download Manager
 
-Effective date: August 14, 2026
+Effective date: August 17, 2026
 
 Parabolic Download Manager is a Firefox extension that detects downloadable media in web pages and sends user-requested download operations to the Parabolic desktop application through Firefox Native Messaging.
 
@@ -10,7 +10,7 @@ The extension may process the following information in the browser:
 
 - the URL and title of the current page;
 - detected media URLs and basic media information, such as content type;
-- the download preset, quality, or format selected by the user;
+- the download preset, quality, format, and priority selected by the user;
 - the status and identifier of a download;
 - extension preferences stored locally in Firefox.
 
@@ -32,7 +32,7 @@ This information is processed only to provide the extension's requested function
 
 The extension stores its settings locally using Firefox storage. It does not create a remote browsing history or upload extension settings to the developer.
 
-Parabolic may store download history and related information locally on the user's computer according to the application's settings. Downloaded files remain in the destination selected in Parabolic until the user deletes them. Users can clear download history through Parabolic and can remove extension preferences by uninstalling the extension or clearing its local data in Firefox.
+Parabolic stores the active browser queue and recovery information locally in SQLite so accepted downloads can continue after Firefox closes and resume after interruption. It may also store download history according to the application's settings. Downloaded and partial files remain on the user's computer until completed or removed. Users can clear download history through Parabolic and can remove extension preferences by uninstalling the extension or clearing its local data in Firefox.
 
 ## Sharing, sale, advertising, and analytics
 
@@ -60,13 +60,13 @@ https://github.com/Othman-Benbrahim/Parabolic
 
 Required Parabolic desktop release:
 
-https://github.com/Othman-Benbrahim/Parabolic/releases/tag/2026.8.0
+https://github.com/Othman-Benbrahim/Parabolic/releases/latest
 
 ---
 
 # Politique de confidentialité de Parabolic Download Manager
 
-Date d'entrée en vigueur : 14 août 2026
+Date d'entrée en vigueur : 17 août 2026
 
 Parabolic Download Manager est une extension Firefox qui détecte les médias téléchargeables dans les pages Web et transmet les téléchargements demandés par l'utilisateur à l'application de bureau Parabolic au moyen de Firefox Native Messaging.
 
@@ -76,7 +76,7 @@ L'extension peut traiter les informations suivantes dans le navigateur :
 
 - l'adresse et le titre de la page courante ;
 - les adresses des médias détectés et certaines informations techniques, comme leur type de contenu ;
-- le préréglage, la qualité ou le format choisi par l'utilisateur ;
+- le préréglage, la qualité, le format et la priorité choisis par l'utilisateur ;
 - l'état et l'identifiant d'un téléchargement ;
 - les préférences de l'extension enregistrées localement dans Firefox.
 
@@ -98,7 +98,7 @@ Ces informations sont utilisées uniquement pour fournir les fonctions demandée
 
 L'extension enregistre ses paramètres localement au moyen du stockage de Firefox. Elle ne crée pas d'historique de navigation distant et ne transmet pas ses paramètres au développeur.
 
-Parabolic peut conserver localement un historique des téléchargements et les informations associées, conformément aux paramètres de l'application. Les fichiers téléchargés restent dans le dossier choisi dans Parabolic jusqu'à leur suppression par l'utilisateur. L'utilisateur peut effacer l'historique dans Parabolic et supprimer les préférences de l'extension en la désinstallant ou en effaçant ses données locales dans Firefox.
+Parabolic conserve localement dans SQLite la file active du navigateur et les informations de reprise afin que les téléchargements acceptés continuent après la fermeture de Firefox et reprennent après une interruption. L'application peut également conserver un historique conformément à ses paramètres. Les fichiers téléchargés ou partiels restent sur l'ordinateur jusqu'à leur achèvement ou leur suppression. L'utilisateur peut effacer l'historique dans Parabolic et supprimer les préférences de l'extension en la désinstallant ou en effaçant ses données locales dans Firefox.
 
 ## Partage, vente, publicité et statistiques
 
@@ -126,4 +126,4 @@ https://github.com/Othman-Benbrahim/Parabolic
 
 Version requise de l'application Parabolic :
 
-https://github.com/Othman-Benbrahim/Parabolic/releases/tag/2026.8.0
+https://github.com/Othman-Benbrahim/Parabolic/releases/latest

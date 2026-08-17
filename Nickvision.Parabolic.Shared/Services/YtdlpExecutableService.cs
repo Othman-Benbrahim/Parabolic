@@ -257,7 +257,11 @@ public class YtdlpExecutableService : DependencyExecutableService, IYtdlpExecuta
             arguments.Add("--format-sort");
             arguments.Add(formatSort);
         }
-        if (!_configurationService.UsePartFiles)
+        if (downloadOptions.KeepPartialFiles)
+        {
+            arguments.Add("--continue");
+        }
+        else if (!_configurationService.UsePartFiles)
         {
             arguments.Add("--no-part");
         }

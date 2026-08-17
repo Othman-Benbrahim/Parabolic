@@ -1,9 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Nickvision.Desktop.Application;
-using Nickvision.Parabolic.Shared.Helpers;
-using Nickvision.Parabolic.Shared.Services;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,26 +11,7 @@ internal static class Program
         using var shutdown = new CancellationTokenSource();
         try
         {
-            var builder = Host.CreateApplicationBuilder([]);
-            builder.ConfigureParabolic([]);
-            builder.Logging.ClearProviders();
-            using var host = builder.Build();
-            await host.StartAsync(shutdown.Token);
-
-            await using var transport = new NativeMessagingTransport(
-                Console.OpenStandardInput(),
-                Console.OpenStandardOutput());
-            using var server = new NativeMessagingServer(
-                transport,
-                host.Services.GetRequiredService<IConfigurationService>(),
-                host.Services.GetRequiredService<IDiscoveryService>(),
-                host.Services.GetRequiredService<IDownloadService>(),
-                host.Services.GetRequiredService<IYtdlpExecutableService>());
-            await server.RunAsync(shutdown.Token);
-
-            shutdown.Cancel();
-            await host.Services.GetRequiredService<IDownloadService>().StopAllAsync();
-            await host.StopAsync();
+            await NativeHostRelay.RunAsync(shutdown.Token);
             return 0;
         }
         catch (Exception exception)

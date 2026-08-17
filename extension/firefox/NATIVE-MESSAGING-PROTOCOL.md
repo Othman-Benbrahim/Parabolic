@@ -1,6 +1,6 @@
 # Parabolic Firefox Native Messaging Protocol
 
-This document is the implementation contract between Firefox add-on `0.4.x` and the adapted Parabolic desktop release. Protocol version `1` uses Firefox Native Messaging framing with JSON message bodies.
+This document is the implementation contract between Firefox add-on `0.5.x` and Parabolic `2026.8.1`. Protocol version `2` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe.
 
 ## Host registration
 
@@ -27,7 +27,7 @@ parabolic-media-detector@othmanbenbrahim.dev
 
 ```json
 {
-  "protocolVersion": 1,
+  "protocolVersion": 2,
   "requestId": "9ca24fa5-0aac-4ab0-a5fc-a368a13f5a21",
   "type": "download",
   "payload": {}
@@ -40,7 +40,7 @@ Every request receives one response with the same `requestId`.
 
 ```json
 {
-  "protocolVersion": 1,
+  "protocolVersion": 2,
   "requestId": "9ca24fa5-0aac-4ab0-a5fc-a368a13f5a21",
   "type": "response",
   "ok": true,
@@ -52,7 +52,7 @@ Every request receives one response with the same `requestId`.
 
 ```json
 {
-  "protocolVersion": 1,
+  "protocolVersion": 2,
   "requestId": "9ca24fa5-0aac-4ab0-a5fc-a368a13f5a21",
   "type": "response",
   "ok": false,
@@ -74,8 +74,8 @@ Request payload:
 ```json
 {
   "extensionId": "parabolic-media-detector@othmanbenbrahim.dev",
-  "extensionVersion": "0.4.0",
-  "protocolVersion": 1
+  "extensionVersion": "0.5.0",
+  "protocolVersion": 2
 }
 ```
 
@@ -83,9 +83,9 @@ Response payload:
 
 ```json
 {
-  "appVersion": "2026.8.0",
-  "protocolVersion": 1,
-  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update"]
+  "appVersion": "2026.8.1",
+  "protocolVersion": 2,
+  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads"]
 }
 ```
 
@@ -139,7 +139,8 @@ Request payload:
   "preset": "best",
   "formatId": "",
   "sourceKind": "page",
-  "frameUrl": "https://example.com/watch/123"
+  "frameUrl": "https://example.com/watch/123",
+  "priority": "normal"
 }
 ```
 
@@ -183,7 +184,8 @@ Response payload:
 ```json
 {
   "downloadId": "download-a450d4",
-  "status": "queued"
+  "status": "queued",
+  "priority": "normal"
 }
 ```
 
@@ -193,7 +195,7 @@ Events are not request responses and use `type: "event"`:
 
 ```json
 {
-  "protocolVersion": 1,
+  "protocolVersion": 2,
   "type": "event",
   "payload": {
     "downloadId": "download-a450d4",
@@ -202,12 +204,34 @@ Events are not request responses and use `type: "event"`:
     "progress": 42.5,
     "speed": "8.4 MiB/s",
     "eta": 18,
-    "filename": "Example video.mp4"
+    "filename": "Example video.mp4",
+    "priority": "normal"
   }
 }
 ```
 
-Status is one of `queued`, `analyzing`, `downloading`, `merging`, `completed`, `failed`, or `cancelled`. Progress is a number from 0 through 100 when known.
+Status is one of `queued`, `analyzing`, `downloading`, `paused`, `merging`, `completed`, `failed`, or `cancelled`. Progress is a number from 0 through 100 when known.
+
+## Persistent queue controls
+
+`pause`, `resume`, and `cancel` use this payload:
+
+```json
+{
+  "downloadId": "download-a450d4"
+}
+```
+
+`set-priority` adds one of `high`, `normal`, or `low`:
+
+```json
+{
+  "downloadId": "download-a450d4",
+  "priority": "high"
+}
+```
+
+`list-downloads` takes an empty payload and returns active queue snapshots. Firefox calls it after reconnecting so completion events and tab routing can continue without restarting the download.
 
 ## `cancel`
 
@@ -235,6 +259,6 @@ The host opens the containing folder only for a download ID it created. It must 
 
 ## Windows lifecycle
 
-The first implementation is a dedicated host process that resolves Parabolic's existing configuration, discovery and download services directly. Firefox starts it over standard input/output and keeps one port open for commands and events. The WinUI application does not have to be open and is not activated.
+Firefox starts `Nickvision.Parabolic.NativeHost.exe` over standard input/output. That executable only connects to `Parabolic.DownloadManager.v1` and copies framed messages in both directions. It starts `Nickvision.Parabolic.DownloadService.exe` when necessary.
 
-The host cancels its remaining downloads when Firefox closes the port. A later implementation may move active downloads to a separately persistent broker if downloads must survive a complete Firefox shutdown.
+The service owns discovery, the priority queue, downloads and the separate `browser_recovery_queue` SQLite table. Closing Firefox ends only the relay connection. The service and accepted downloads remain active, and interrupted items are restored when the service next starts.

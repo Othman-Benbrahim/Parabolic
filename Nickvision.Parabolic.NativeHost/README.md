@@ -1,11 +1,11 @@
 # Parabolic Firefox Native Host
 
-`Nickvision.Parabolic.NativeHost` implements protocol version 1 from
+`Nickvision.Parabolic.NativeHost` implements protocol version 2 from
 `extension/firefox/NATIVE-MESSAGING-PROTOCOL.md` for Windows.
 
-It is a windowless executable launched by Firefox. The host reuses Parabolic's
-configuration, yt-dlp discovery and download services, so downloads use the same
-save folder and media preferences as the desktop application.
+It is a short-lived windowless relay launched by Firefox. It starts the
+persistent per-user download service when needed, connects to the secured named
+pipe, then copies Firefox Native Messaging frames in both directions.
 
 ## Supported commands
 
@@ -13,21 +13,25 @@ save folder and media preferences as the desktop application.
 - `get-formats`
 - `download`
 - `cancel`
+- `pause`
+- `resume`
+- `set-priority`
+- `list-downloads`
 - `open-folder`
 - `check-ytdlp-update`
 - `update-ytdlp`
 
-Download progress and final state are emitted as asynchronous events.
-The update commands use Parabolic's existing stable yt-dlp updater. Updates are
-explicitly requested by the user and are refused while downloads are active or
-queued.
+The persistent service emits progress and final state as asynchronous events.
+The update commands remain explicit and are refused while downloads are active
+or queued.
 
 ## Publish and smoke test
 
 ```powershell
 dotnet restore .\Nickvision.Parabolic.NativeHost --runtime win-x64
+dotnet restore .\Nickvision.Parabolic.DownloadService --runtime win-x64
 dotnet publish .\Nickvision.Parabolic.NativeHost -c Release --no-restore --runtime win-x64
-.\tests\windows\test-native-host.ps1 -HostPath .\Nickvision.Parabolic.NativeHost\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\Nickvision.Parabolic.NativeHost.exe
+dotnet publish .\Nickvision.Parabolic.DownloadService -c Release --no-restore --runtime win-x64
 ```
 
 The normal Windows workflow publishes this project for x64 and ARM64 before

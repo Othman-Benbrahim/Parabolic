@@ -1,6 +1,6 @@
-# Parabolic Media Detector for Firefox
+# Parabolic Download Manager for Firefox
 
-Version `0.4.0` keeps the validated in-player download workflow from `0.3.5` and adds an on-demand yt-dlp update command. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path.
+Version `0.5.0` uses protocol v2 and the persistent Parabolic download service. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path and Firefox may be closed after a task is accepted.
 
 ## Target user flow
 
@@ -19,9 +19,11 @@ The toolbar popup remains available for bridge diagnostics and unusual pages whe
 flowchart TD
     A["Firefox media page"] --> B["Detection and player overlay"]
     B --> C["Firefox background script"]
-    C --> D["Native Messaging host"]
-    D --> E["Parabolic download engine"]
-    E --> C
+    C --> D["Native Messaging relay"]
+    D --> E["Named pipe"]
+    E --> F["Persistent Parabolic service"]
+    F --> G["SQLite recovery + priority queue"]
+    G --> C
 ```
 
 No detected URL or browsing data is sent to a remote service by the add-on. URLs leave Firefox only when the user starts a download or explicitly requests the format list.
@@ -37,7 +39,8 @@ No detected URL or browsing data is sent to a remote service by the add-on. URLs
 | `popup.html`, `popup.css`, `popup.js` | Secondary diagnostics and detected-source interface. |
 | `options.html`, `options.css`, `options.js` | Overlay, quality, detection and compatibility preferences. |
 | `NATIVE-MESSAGING-PROTOCOL.md` | Versioned contract implemented by the Windows native host. |
-| `../../Nickvision.Parabolic.NativeHost/` | Windows stdio host that connects Firefox to Parabolic services. |
+| `../../Nickvision.Parabolic.NativeHost/` | Short-lived Windows stdio relay between Firefox and the named pipe. |
+| `../../Nickvision.Parabolic.DownloadService/` | Persistent per-user engine that owns browser downloads and recovery. |
 | `build-addon.ps1` | Packages the development add-on on Windows. |
 
 `utils.js` and the `icons/` directory remain required.
@@ -58,7 +61,7 @@ The add-on requests the native application name:
 com.nickvision.parabolic
 ```
 
-The adapted desktop source now contains `Nickvision.Parabolic.NativeHost`. It performs discovery with yt-dlp, returns a concise format list, starts downloads with Parabolic's configured output settings, relays progress, accepts cancellation, and can reveal a completed file in Explorer.
+The adapted desktop source contains a small `Nickvision.Parabolic.NativeHost` relay and `Nickvision.Parabolic.DownloadService`. The service performs discovery with yt-dlp, returns a concise format list, owns downloads after Firefox disconnects, relays progress, accepts pause/resume/cancel/priority commands, and can reveal a completed file in Explorer.
 
 The Windows installer publishes the host beside Parabolic, writes its absolute-path JSON manifest, and registers `com.nickvision.parabolic` for both 32-bit and 64-bit Firefox registry views. The host does not activate the WinUI window during the normal flow.
 
@@ -71,7 +74,7 @@ The current public upstream Parabolic release does not install this host. Until 
 
 Automatic fallback is disabled by default because it changes focus away from Firefox. It can be enabled in settings for temporary testing.
 
-Firefox owns the native connection. Downloads continue while that connection and Firefox remain open; closing Firefox stops work owned by that host process. Moving downloads into a separately persistent broker is a possible future lifecycle improvement, but is not required for the first integrated release.
+Firefox owns only the temporary relay connection. Accepted downloads continue inside the per-user service after Firefox closes. Browser recovery records are stored separately from the desktop application's interactive recovery queue, preventing identifier collisions or duplicate restoration.
 
 ## Privacy and security
 

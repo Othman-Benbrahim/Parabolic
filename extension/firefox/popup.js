@@ -1,5 +1,5 @@
 let activeTab = null;
-let currentSettings = { quickDownloadPreset: "best" };
+let currentSettings = { quickDownloadPreset: "best", defaultPriority: "normal" };
 
 function readableSize(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -123,6 +123,7 @@ function renderCandidate(candidate) {
     mediaUrl: candidate.kind === "youtube" ? "" : candidate.url,
     title: candidateTitle(candidate),
     preset: currentSettings.quickDownloadPreset,
+    priority: currentSettings.defaultPriority,
     sourceKind: candidate.kind
   }, button));
   copy.append(title, meta, url);
@@ -172,6 +173,7 @@ async function loadPopup() {
     pageUrl: activeTab.url,
     title: activeTab.title,
     preset: currentSettings.quickDownloadPreset,
+    priority: currentSettings.defaultPriority,
     sourceKind: "page"
   }, downloadPageButton));
   document.getElementById("settingsButton").addEventListener("click", () => {

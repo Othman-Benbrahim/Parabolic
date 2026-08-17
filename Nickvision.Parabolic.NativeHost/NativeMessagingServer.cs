@@ -7,7 +7,6 @@ using Nickvision.Parabolic.Shared.Services;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -18,9 +17,9 @@ using System.Threading.Tasks;
 
 namespace Nickvision.Parabolic.NativeHost;
 
-internal sealed class NativeMessagingServer : IDisposable
+public sealed class NativeMessagingServer : IDisposable
 {
-    public const int ProtocolVersion = 1;
+    public const int ProtocolVersion = 2;
 
     private static readonly string[] SupportedPresets = ["best", "1080", "720", "480", "audio"];
 
@@ -29,10 +28,8 @@ internal sealed class NativeMessagingServer : IDisposable
     private readonly IDiscoveryService _discoveryService;
     private readonly IDownloadService _downloadService;
     private readonly IYtdlpExecutableService _ytdlpExecutableService;
+    private readonly PersistentDownloadCoordinator _downloadCoordinator;
     private readonly ConcurrentDictionary<string, CachedDiscovery> _discoveryCache;
-    private readonly ConcurrentDictionary<int, DownloadSession> _sessionsByInternalId;
-    private readonly ConcurrentDictionary<string, DownloadSession> _sessionsByExternalId;
-    private readonly SemaphoreSlim _downloadMutationLock;
     private readonly SemaphoreSlim _dependencyUpdateLock;
     private CancellationToken _shutdownToken;
 
@@ -41,22 +38,19 @@ internal sealed class NativeMessagingServer : IDisposable
         IConfigurationService configurationService,
         IDiscoveryService discoveryService,
         IDownloadService downloadService,
-        IYtdlpExecutableService ytdlpExecutableService)
+        IYtdlpExecutableService ytdlpExecutableService,
+        PersistentDownloadCoordinator downloadCoordinator)
     {
         _transport = transport;
         _configurationService = configurationService;
         _discoveryService = discoveryService;
         _downloadService = downloadService;
         _ytdlpExecutableService = ytdlpExecutableService;
+        _downloadCoordinator = downloadCoordinator;
         _discoveryCache = new ConcurrentDictionary<string, CachedDiscovery>(StringComparer.Ordinal);
-        _sessionsByInternalId = new ConcurrentDictionary<int, DownloadSession>();
-        _sessionsByExternalId = new ConcurrentDictionary<string, DownloadSession>(StringComparer.Ordinal);
-        _downloadMutationLock = new SemaphoreSlim(1, 1);
         _dependencyUpdateLock = new SemaphoreSlim(1, 1);
         _shutdownToken = CancellationToken.None;
-        _downloadService.DownloadProgressChanged += DownloadService_DownloadProgressChanged;
-        _downloadService.DownloadCompleted += DownloadService_DownloadCompleted;
-        _downloadService.DownloadStopped += DownloadService_DownloadStopped;
+        _downloadCoordinator.EventProduced += DownloadCoordinator_EventProduced;
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -88,10 +82,7 @@ internal sealed class NativeMessagingServer : IDisposable
 
     public void Dispose()
     {
-        _downloadService.DownloadProgressChanged -= DownloadService_DownloadProgressChanged;
-        _downloadService.DownloadCompleted -= DownloadService_DownloadCompleted;
-        _downloadService.DownloadStopped -= DownloadService_DownloadStopped;
-        _downloadMutationLock.Dispose();
+        _downloadCoordinator.EventProduced -= DownloadCoordinator_EventProduced;
         _dependencyUpdateLock.Dispose();
     }
 
@@ -105,8 +96,8 @@ internal sealed class NativeMessagingServer : IDisposable
                 case "hello":
                     await SendSuccessAsync(request.RequestId, new HelloResponse
                     {
-                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.0",
-                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update"]
+                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.1",
+                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads"]
                     }, NativeJsonContext.Default.HelloResponse, cancellationToken);
                     break;
                 case "get-formats":
@@ -117,6 +108,23 @@ internal sealed class NativeMessagingServer : IDisposable
                     break;
                 case "cancel":
                     await HandleCancelAsync(request, cancellationToken);
+                    break;
+                case "pause":
+                    HandlePause(request);
+                    await SendSuccessAsync(request.RequestId, new EmptyPayload(), NativeJsonContext.Default.EmptyPayload, cancellationToken);
+                    break;
+                case "resume":
+                    HandleResume(request);
+                    await SendSuccessAsync(request.RequestId, new EmptyPayload(), NativeJsonContext.Default.EmptyPayload, cancellationToken);
+                    break;
+                case "set-priority":
+                    await HandleSetPriorityAsync(request, cancellationToken);
+                    break;
+                case "list-downloads":
+                    await SendSuccessAsync(request.RequestId, new DownloadsResponse
+                    {
+                        Downloads = _downloadCoordinator.ListActive()
+                    }, NativeJsonContext.Default.DownloadsResponse, cancellationToken);
                     break;
                 case "open-folder":
                     await HandleOpenFolderAsync(request, cancellationToken);
@@ -278,89 +286,53 @@ internal sealed class NativeMessagingServer : IDisposable
             options = BuildDirectDownloadOptions(mediaRequest);
         }
 
-        var session = new DownloadSession(externalId, mediaRequest.TabId, options.Url);
-        await _downloadMutationLock.WaitAsync(cancellationToken);
-        try
+        options.Priority = ParsePriority(mediaRequest.Priority);
+        var snapshot = await _downloadCoordinator.EnqueueAsync(
+            options,
+            externalId,
+            mediaRequest.TabId,
+            cancellationToken);
+        await SendSuccessAsync(request.RequestId, new DownloadResponse
         {
-            DownloadAddedEventArgs? added = null;
-            EventHandler<DownloadAddedEventArgs>? handler = null;
-            handler = (_, eventArgs) =>
-            {
-                if (added is not null || eventArgs.Url != options.Url)
-                {
-                    return;
-                }
-                added = eventArgs;
-                session.InternalId = eventArgs.Id;
-                session.Path = eventArgs.Path;
-                _sessionsByInternalId[eventArgs.Id] = session;
-                _sessionsByExternalId[externalId] = session;
-            };
-            _downloadService.DownloadAdded += handler;
-            try
-            {
-                await _downloadService.AddAsync(options, false);
-            }
-            finally
-            {
-                _downloadService.DownloadAdded -= handler;
-            }
-            if (added is null)
-            {
-                throw new NativeRequestException("DOWNLOAD_NOT_STARTED", "Parabolic could not add the download to its queue.");
-            }
-            await SendSuccessAsync(request.RequestId, new DownloadResponse
-            {
-                DownloadId = externalId,
-                Status = added.Status == DownloadStatus.Queued ? "queued" : "downloading"
-            }, NativeJsonContext.Default.DownloadResponse, cancellationToken);
-        }
-        finally
-        {
-            _downloadMutationLock.Release();
-        }
+            DownloadId = externalId,
+            Status = snapshot.Status,
+            Priority = snapshot.Priority
+        }, NativeJsonContext.Default.DownloadResponse, cancellationToken);
     }
 
     private async Task HandleCancelAsync(NativeRequest request, CancellationToken cancellationToken)
     {
         var cancelRequest = DeserializePayload(request, NativeJsonContext.Default.CancelRequest);
-        if (!_sessionsByExternalId.TryGetValue(cancelRequest.DownloadId, out var session) || session.InternalId < 0)
-        {
-            throw new NativeRequestException("DOWNLOAD_NOT_FOUND", "The requested Parabolic download was not found.");
-        }
-        await _downloadMutationLock.WaitAsync(cancellationToken);
-        try
-        {
-            if (!await _downloadService.StopAsync(session.InternalId))
-            {
-                throw new NativeRequestException("DOWNLOAD_NOT_RUNNING", "The requested download is no longer running.");
-            }
-        }
-        finally
-        {
-            _downloadMutationLock.Release();
-        }
+        await _downloadCoordinator.CancelAsync(cancelRequest.DownloadId, cancellationToken);
+        await SendSuccessAsync(request.RequestId, new EmptyPayload(), NativeJsonContext.Default.EmptyPayload, cancellationToken);
+    }
+
+    private void HandlePause(NativeRequest request)
+    {
+        var controlRequest = DeserializePayload(request, NativeJsonContext.Default.DownloadControlRequest);
+        _downloadCoordinator.Pause(controlRequest.DownloadId);
+    }
+
+    private void HandleResume(NativeRequest request)
+    {
+        var controlRequest = DeserializePayload(request, NativeJsonContext.Default.DownloadControlRequest);
+        _downloadCoordinator.Resume(controlRequest.DownloadId);
+    }
+
+    private async Task HandleSetPriorityAsync(NativeRequest request, CancellationToken cancellationToken)
+    {
+        var priorityRequest = DeserializePayload(request, NativeJsonContext.Default.SetPriorityRequest);
+        await _downloadCoordinator.SetPriorityAsync(
+            priorityRequest.DownloadId,
+            ParsePriority(priorityRequest.Priority),
+            cancellationToken);
         await SendSuccessAsync(request.RequestId, new EmptyPayload(), NativeJsonContext.Default.EmptyPayload, cancellationToken);
     }
 
     private async Task HandleOpenFolderAsync(NativeRequest request, CancellationToken cancellationToken)
     {
         var openRequest = DeserializePayload(request, NativeJsonContext.Default.OpenFolderRequest);
-        if (!_sessionsByExternalId.TryGetValue(openRequest.DownloadId, out var session)
-            || string.IsNullOrWhiteSpace(session.Path)
-            || !File.Exists(session.Path))
-        {
-            throw new NativeRequestException("FILE_NOT_FOUND", "The completed download file was not found.");
-        }
-        if (!OperatingSystem.IsWindows())
-        {
-            throw new NativeRequestException("UNSUPPORTED_PLATFORM", "Opening the containing folder is available on Windows only.");
-        }
-        Process.Start(new ProcessStartInfo("explorer.exe")
-        {
-            Arguments = $"/select,\"{session.Path}\"",
-            UseShellExecute = true
-        });
+        _downloadCoordinator.OpenFolder(openRequest.DownloadId);
         await SendSuccessAsync(request.RequestId, new EmptyPayload(), NativeJsonContext.Default.EmptyPayload, cancellationToken);
     }
 
@@ -428,7 +400,8 @@ internal sealed class NativeMessagingServer : IDisposable
             FileType = isAudio
                 ? _configurationService.PreviousAudioOnlyFileType
                 : _configurationService.PreviousFullFileType,
-            UseSleepPreset = false
+            UseSleepPreset = false,
+            KeepPartialFiles = true
         };
         ApplyPreset(options, request.Preset, isAudio);
         return options;
@@ -453,7 +426,8 @@ internal sealed class NativeMessagingServer : IDisposable
                 : _configurationService.PreviousFullFileType,
             PlaylistPosition = media.PlaylistPosition,
             RequiresPlaylistItems = media.RequiresPlaylistItems,
-            UseSleepPreset = false
+            UseSleepPreset = false,
+            KeepPartialFiles = true
         };
 
         options.FormatSelector = selectedFormat.Selector;
@@ -537,69 +511,8 @@ internal sealed class NativeMessagingServer : IDisposable
         }
     }
 
-    private void DownloadService_DownloadProgressChanged(object? sender, DownloadProgressChangedEventArgs eventArgs)
-    {
-        if (!_sessionsByInternalId.TryGetValue(eventArgs.Id, out var session))
-        {
-            return;
-        }
-        var log = eventArgs.LogChunk.ToString();
-        var message = GetProgressMessage(eventArgs.LogChunk);
-        var status = log.Contains("ERROR:", StringComparison.OrdinalIgnoreCase)
-            ? "failed"
-            : log.Contains("Merger", StringComparison.OrdinalIgnoreCase)
-            || log.Contains("Merging", StringComparison.OrdinalIgnoreCase)
-            ? "merging"
-            : "downloading";
-        _ = SendEventAsync(new DownloadEventPayload
-        {
-            DownloadId = session.ExternalId,
-            TabId = session.TabId,
-            Status = status,
-            Progress = double.IsFinite(eventArgs.Progress) && eventArgs.Progress >= 0
-                ? Math.Clamp(eventArgs.Progress * 100.0, 0.0, 100.0)
-                : null,
-            Speed = eventArgs.Speed > 0 ? eventArgs.SpeedString : null,
-            Eta = eventArgs.Eta >= 0 ? eventArgs.Eta : null,
-            Filename = Path.GetFileName(session.Path),
-            Message = message
-        });
-    }
-
-    private void DownloadService_DownloadCompleted(object? sender, DownloadCompletedEventArgs eventArgs)
-    {
-        if (!_sessionsByInternalId.TryGetValue(eventArgs.Id, out var session))
-        {
-            return;
-        }
-        session.Path = eventArgs.Path;
-        _ = SendEventAsync(new DownloadEventPayload
-        {
-            DownloadId = session.ExternalId,
-            TabId = session.TabId,
-            Status = eventArgs.Status == DownloadStatus.Success ? "completed" : "failed",
-            Progress = eventArgs.Status == DownloadStatus.Success ? 100.0 : null,
-            Filename = Path.GetFileName(eventArgs.Path),
-            Message = eventArgs.Status == DownloadStatus.Success
-                ? null
-                : GetDownloadFailureMessage(eventArgs.Log)
-        });
-    }
-
-    private void DownloadService_DownloadStopped(object? sender, DownloadEventArgs eventArgs)
-    {
-        if (!_sessionsByInternalId.TryGetValue(eventArgs.Id, out var session))
-        {
-            return;
-        }
-        _ = SendEventAsync(new DownloadEventPayload
-        {
-            DownloadId = session.ExternalId,
-            TabId = session.TabId,
-            Status = "cancelled",
-            Filename = Path.GetFileName(session.Path)
-        });
-    }
+    private void DownloadCoordinator_EventProduced(DownloadEventPayload payload) =>
+        _ = SendEventAsync(payload);
 
     private async Task SendEventAsync(DownloadEventPayload payload)
     {
@@ -667,6 +580,14 @@ internal sealed class NativeMessagingServer : IDisposable
         }
     }
 
+    private static DownloadPriority ParsePriority(string priority) => priority.ToLowerInvariant() switch
+    {
+        "high" => DownloadPriority.High,
+        "low" => DownloadPriority.Low,
+        "normal" or "" => DownloadPriority.Normal,
+        _ => throw new NativeRequestException("INVALID_PRIORITY", "Download priority must be high, normal, or low.")
+    };
+
     private static void AddCandidate(List<Uri> candidates, string value)
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
@@ -717,31 +638,6 @@ internal sealed class NativeMessagingServer : IDisposable
         };
     }
 
-    private static string GetDownloadFailureMessage(ReadOnlyMemory<char> log)
-    {
-        var lines = log.ToString().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        var error = lines.LastOrDefault(line => line.Contains("ERROR:", StringComparison.OrdinalIgnoreCase))
-            ?? lines.LastOrDefault();
-        if (string.IsNullOrWhiteSpace(error))
-        {
-            return "The download failed before yt-dlp returned an error message.";
-        }
-        error = error.Trim();
-        return error.Length <= 400 ? error : $"{error[..397]}...";
-    }
-
-    private static string? GetProgressMessage(ReadOnlyMemory<char> logChunk)
-    {
-        var message = logChunk.ToString().Trim();
-        if (string.IsNullOrWhiteSpace(message)
-            || message.StartsWith("[Parabolic] Progress", StringComparison.Ordinal)
-            || message.StartsWith("[debug]", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-        return message.Length <= 300 ? message : $"{message[..297]}...";
-    }
-
     private sealed class CachedDiscovery
     {
         public Uri SourceUrl { get; }
@@ -774,21 +670,4 @@ internal sealed class NativeMessagingServer : IDisposable
         }
     }
 
-    private sealed class DownloadSession
-    {
-        public string ExternalId { get; }
-        public int TabId { get; }
-        public Uri Url { get; }
-        public int InternalId { get; set; }
-        public string Path { get; set; }
-
-        public DownloadSession(string externalId, int tabId, Uri url)
-        {
-            ExternalId = externalId;
-            TabId = tabId;
-            Url = url;
-            InternalId = -1;
-            Path = string.Empty;
-        }
-    }
 }

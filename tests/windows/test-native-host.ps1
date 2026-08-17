@@ -1,6 +1,9 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$HostPath
+    [string]$HostPath,
+
+    [Parameter(Mandatory = $true)]
+    [string]$ServicePath
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,6 +11,13 @@ $ErrorActionPreference = "Stop"
 if (-not (Test-Path -LiteralPath $HostPath -PathType Leaf)) {
     throw "Native host executable not found: $HostPath"
 }
+if (-not (Test-Path -LiteralPath $ServicePath -PathType Leaf)) {
+    throw "Persistent download service executable not found: $ServicePath"
+}
+
+$resolvedServicePath = (Resolve-Path -LiteralPath $ServicePath).Path
+$hostDirectory = Split-Path -Parent (Resolve-Path -LiteralPath $HostPath).Path
+Copy-Item -Path "$(Split-Path -Parent $resolvedServicePath)\*" -Destination $hostDirectory -Recurse -Force
 
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = (Resolve-Path -LiteralPath $HostPath).Path
@@ -25,13 +35,13 @@ if (-not $process.Start()) {
 
 try {
     $request = @{
-        protocolVersion = 1
+        protocolVersion = 2
         requestId = "windows-smoke-test"
         type = "hello"
         payload = @{
             extensionId = "parabolic-media-detector@othmanbenbrahim.dev"
-            extensionVersion = "0.3.0"
-            protocolVersion = 1
+            extensionVersion = "0.5.0"
+            protocolVersion = 2
         }
     } | ConvertTo-Json -Compress -Depth 5
     $payload = [System.Text.Encoding]::UTF8.GetBytes($request)
@@ -62,11 +72,11 @@ try {
     if ($response.requestId -ne "windows-smoke-test" -or -not $response.ok) {
         throw "Native host hello request failed: $($response | ConvertTo-Json -Compress -Depth 5)"
     }
-    $requiredCapabilities = @("formats", "download", "progress", "cancel", "open-folder", "ytdlp-update")
+    $requiredCapabilities = @("formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads")
     $missingCapabilities = @($requiredCapabilities | Where-Object {
         $response.payload.capabilities -notcontains $_
     })
-    if ($response.payload.protocolVersion -ne 1 -or $missingCapabilities.Count -gt 0) {
+    if ($response.payload.protocolVersion -ne 2 -or $missingCapabilities.Count -gt 0) {
         throw "Native host returned incompatible capabilities."
     }
     Write-Host "Native Messaging host smoke test passed ($($response.payload.appVersion))."
@@ -77,4 +87,6 @@ finally {
         $process.Kill($true)
     }
     $process.Dispose()
+    Get-Process -Name "Nickvision.Parabolic.DownloadService" -ErrorAction SilentlyContinue |
+        Stop-Process -Force -ErrorAction SilentlyContinue
 }

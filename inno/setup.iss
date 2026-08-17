@@ -4,7 +4,7 @@
 #define MyAppName            "Nickvision Parabolic"
 #define MyAppShortName       "Parabolic"
 #define MyAppShortNameLower  "parabolic"
-#define MyAppVersion         "2026.8.0"
+#define MyAppVersion         "2026.8.1"
 #define MyAppPublisher       "Nickvision"
 #define MyAppURL             "https://nickvision.org"
 #define MyAppExeName         "Nickvision.Parabolic.WinUI.exe"
@@ -88,6 +88,7 @@ Source: "deno.exe"; DestDir: "{app}\Release"; Flags: ignoreversion
 Source: "..\{#GetEnv('APP_FILES_PATH')}\{#MyAppExeName}"; DestDir: "{app}\Release"; Flags: ignoreversion
 Source: "..\{#GetEnv('APP_FILES_PATH')}\*"; DestDir: "{app}\Release"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\{#GetEnv('NATIVE_HOST_FILES_PATH')}\*"; DestDir: "{app}\Release"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\{#GetEnv('DOWNLOAD_SERVICE_FILES_PATH')}\*"; DestDir: "{app}\Release"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppShortName}"; Filename: "{app}\Release\{#MyAppExeName}"; Tasks: quicklaunchicon
@@ -100,11 +101,36 @@ Root: HKCR; Subkey: "{#MyAppShortNameLower}\DefaultIcon"; ValueType: "string"; V
 Root: HKCR; Subkey: "{#MyAppShortNameLower}\shell\open\command"; ValueType: "string"; ValueData: """{app}\Release\{#MyAppExeName}"" ""%1"""
 Root: HKLM64; Subkey: "Software\Mozilla\NativeMessagingHosts\com.nickvision.parabolic"; ValueType: "string"; ValueData: "{app}\Release\com.nickvision.parabolic.json"; Flags: uninsdeletekey
 Root: HKLM32; Subkey: "Software\Mozilla\NativeMessagingHosts\com.nickvision.parabolic"; ValueType: "string"; ValueData: "{app}\Release\com.nickvision.parabolic.json"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: "string"; ValueName: "Parabolic Download Service"; ValueData: """{app}\Release\Nickvision.Parabolic.DownloadService.exe"" --background"; Flags: uninsdeletevalue
 
 [Run]
+Filename: "{app}\Release\Nickvision.Parabolic.DownloadService.exe"; Parameters: "--background"; Flags: nowait runhidden skipifsilent runascurrentuser
 Filename: "{app}\Release\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent unchecked
 
 [Code]
+procedure StopPersistentDownloadService;
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'),
+    '/F /IM Nickvision.Parabolic.DownloadService.exe',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  StopPersistentDownloadService;
+  Result := '';
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    StopPersistentDownloadService;
+  end;
+end;
+
 procedure WriteFirefoxNativeHostManifest;
 var
   HostPath: String;

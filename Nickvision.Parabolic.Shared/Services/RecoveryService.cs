@@ -10,23 +10,23 @@ namespace Nickvision.Parabolic.Shared.Services;
 
 public class RecoveryService : IRecoveryService
 {
-    private static readonly string TableName;
-
     private readonly ILogger<RecoveryService> _logger;
     private readonly IConfigurationService _configurationService;
     private readonly IDatabaseService _databaseService;
+    private readonly string _tableName;
     private bool _tableEnsured;
 
-    static RecoveryService()
+    public RecoveryService(ILogger<RecoveryService> logger, IConfigurationService configurationService, IDatabaseService databaseService)
+        : this(logger, configurationService, databaseService, "recovery_queue")
     {
-        TableName = "recovery_queue";
     }
 
-    public RecoveryService(ILogger<RecoveryService> logger, IConfigurationService configurationService, IDatabaseService databaseService)
+    protected RecoveryService(ILogger<RecoveryService> logger, IConfigurationService configurationService, IDatabaseService databaseService, string tableName)
     {
         _logger = logger;
         _configurationService = configurationService;
         _databaseService = databaseService;
+        _tableName = tableName;
         _tableEnsured = false;
     }
 
@@ -35,7 +35,7 @@ public class RecoveryService : IRecoveryService
         get
         {
             EnsureTable();
-            var count = _databaseService.CountInTable(TableName);
+            var count = _databaseService.CountInTable(_tableName);
             _logger.LogDebug($"{count} recoverable downloads found.");
             return count;
         }
@@ -45,7 +45,7 @@ public class RecoveryService : IRecoveryService
     {
         _logger.LogDebug($"Adding recoverable download ({download.Id}): {download.Options.Url} {(download.CredentialRequired ? "*" : string.Empty)}");
         await EnsureTableAsync();
-        var res = await _databaseService.InsertIntoTableAsync(TableName, new Dictionary<string, object>()
+        var res = await _databaseService.InsertIntoTableAsync(_tableName, new Dictionary<string, object>()
         {
             { "id", download.Id },
             { "options", JsonSerializer.Serialize(download.Options, ApplicationJsonContext.Default.DownloadOptions) },
@@ -74,7 +74,7 @@ public class RecoveryService : IRecoveryService
         foreach (var download in downloads)
         {
             _logger.LogDebug($"Adding recoverable download ({download.Id}): {download.Options.Url} {(download.CredentialRequired ? "*" : string.Empty)}");
-            if (!await _databaseService.InsertIntoTableAsync(TableName, new Dictionary<string, object>()
+            if (!await _databaseService.InsertIntoTableAsync(_tableName, new Dictionary<string, object>()
             {
                 { "id", download.Id },
                 { "options", JsonSerializer.Serialize(download.Options, ApplicationJsonContext.Default.DownloadOptions) },
@@ -95,7 +95,7 @@ public class RecoveryService : IRecoveryService
     {
         _logger.LogDebug("Clearing all recoverable downloads...");
         await EnsureTableAsync();
-        var res = await _databaseService.ClearTableAsync(TableName);
+        var res = await _databaseService.ClearTableAsync(_tableName);
         if (res)
         {
             _logger.LogDebug("Cleared all recoverable downloads.");
@@ -112,7 +112,7 @@ public class RecoveryService : IRecoveryService
         _logger.LogDebug("Fetching all recoverable downloads...");
         var downloads = new List<RecoverableDownload>();
         await EnsureTableAsync();
-        using var command = await _databaseService.SelectAllFromTableAsync(TableName);
+        using var command = await _databaseService.SelectAllFromTableAsync(_tableName);
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
@@ -129,7 +129,7 @@ public class RecoveryService : IRecoveryService
     {
         _logger.LogDebug($"Removing recoverable download ({download.Id}): {download.Options.Url}");
         await EnsureTableAsync();
-        var res = await _databaseService.DeleteFromTableAsync(TableName, "id", download.Id);
+        var res = await _databaseService.DeleteFromTableAsync(_tableName, "id", download.Id);
         if (res)
         {
             _logger.LogDebug($"Removed recoverable download ({download.Id}).");
@@ -145,7 +145,7 @@ public class RecoveryService : IRecoveryService
     {
         _logger.LogDebug($"Removing recoverable download ({id})...");
         await EnsureTableAsync();
-        var res = await _databaseService.DeleteFromTableAsync(TableName, "id", id);
+        var res = await _databaseService.DeleteFromTableAsync(_tableName, "id", id);
         if (res)
         {
             _logger.LogDebug($"Removed recoverable download ({id}).");
@@ -164,7 +164,7 @@ public class RecoveryService : IRecoveryService
         using var transaction = await _databaseService.CreateTransactionAsync();
         foreach (var id in ids)
         {
-            if (!await _databaseService.DeleteFromTableAsync(TableName, "id", id))
+            if (!await _databaseService.DeleteFromTableAsync(_tableName, "id", id))
             {
                 _logger.LogError($"Failed to remove recoverable download ({id}).");
                 return false;
@@ -176,13 +176,23 @@ public class RecoveryService : IRecoveryService
         return true;
     }
 
+    public async Task<bool> UpdateAsync(RecoverableDownload download)
+    {
+        await EnsureTableAsync();
+        return await _databaseService.UpdateInTableAsync(_tableName, "id", download.Id, new Dictionary<string, object>()
+        {
+            { "options", JsonSerializer.Serialize(download.Options, ApplicationJsonContext.Default.DownloadOptions) },
+            { "credentialRequired", download.CredentialRequired ? 1 : 0 }
+        });
+    }
+
     private void EnsureTable()
     {
         if (_tableEnsured)
         {
             return;
         }
-        _databaseService.EnsureTableExists(TableName, "id INTEGER PRIMARY KEY, options TEXT, credentialRequired INTEGER");
+        _databaseService.EnsureTableExists(_tableName, "id INTEGER PRIMARY KEY, options TEXT, credentialRequired INTEGER");
         _tableEnsured = true;
     }
 
@@ -192,7 +202,7 @@ public class RecoveryService : IRecoveryService
         {
             return;
         }
-        await _databaseService.EnsureTableExistsAsync(TableName, "id INTEGER PRIMARY KEY, options TEXT, credentialRequired INTEGER");
+        await _databaseService.EnsureTableExistsAsync(_tableName, "id INTEGER PRIMARY KEY, options TEXT, credentialRequired INTEGER");
         _tableEnsured = true;
     }
 }

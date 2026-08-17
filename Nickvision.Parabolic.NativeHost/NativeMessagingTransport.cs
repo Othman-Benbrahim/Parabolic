@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Nickvision.Parabolic.NativeHost;
 
-internal sealed class NativeMessagingTransport : IAsyncDisposable
+public sealed class NativeMessagingTransport : IAsyncDisposable
 {
     private const int MaxMessageBytes = 16 * 1024 * 1024;
 
@@ -23,7 +23,7 @@ internal sealed class NativeMessagingTransport : IAsyncDisposable
         _writeLock = new SemaphoreSlim(1, 1);
     }
 
-    public async Task<NativeRequest?> ReadRequestAsync(CancellationToken cancellationToken)
+    internal async Task<NativeRequest?> ReadRequestAsync(CancellationToken cancellationToken)
     {
         var header = new byte[sizeof(int)];
         if (!await ReadExactlyOrEofAsync(_input, header, cancellationToken))
@@ -41,10 +41,10 @@ internal sealed class NativeMessagingTransport : IAsyncDisposable
             ?? throw new JsonException("Native Messaging request was empty.");
     }
 
-    public Task WriteResponseAsync(NativeResponse response, CancellationToken cancellationToken) =>
+    internal Task WriteResponseAsync(NativeResponse response, CancellationToken cancellationToken) =>
         WriteAsync(response, NativeJsonContext.Default.NativeResponse, cancellationToken);
 
-    public Task WriteEventAsync(NativeEventEnvelope message, CancellationToken cancellationToken) =>
+    internal Task WriteEventAsync(NativeEventEnvelope message, CancellationToken cancellationToken) =>
         WriteAsync(message, NativeJsonContext.Default.NativeEventEnvelope, cancellationToken);
 
     public async ValueTask DisposeAsync()

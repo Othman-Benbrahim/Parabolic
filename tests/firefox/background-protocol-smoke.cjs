@@ -20,7 +20,9 @@ const nativePort = {
     nativeRequests.push(message);
     queueMicrotask(() => {
       const payload = message.type === "hello"
-        ? { appVersion: "test", protocolVersion: 1, capabilities: ["ytdlp-update"] }
+        ? { appVersion: "test", protocolVersion: 2, capabilities: ["ytdlp-update", "persistent-queue", "priority"] }
+        : message.type === "list-downloads"
+          ? { downloads: [] }
         : message.type === "download"
           ? { downloadId: "download-test", status: "queued" }
           : message.type === "check-ytdlp-update"
@@ -42,7 +44,7 @@ const nativePort = {
               : {};
       for (const listener of nativeMessageListeners) {
         listener({
-          protocolVersion: 1,
+          protocolVersion: 2,
           requestId: message.requestId,
           type: "response",
           ok: true,
@@ -62,7 +64,7 @@ const browser = {
       nativeHostName = name;
       return nativePort;
     },
-    getManifest() { return { version: "0.4.0" }; },
+    getManifest() { return { version: "0.5.0" }; },
     getURL(value) { return `moz-extension://test/${value}`; },
     onMessage: { addListener(listener) { runtimeMessageListeners.push(listener); } },
     onInstalled: { addListener() {} },
@@ -132,12 +134,10 @@ async function send(message, sender = {}) {
 }
 
 (async () => {
-  assert.equal(vm.runInContext("NATIVE_PULSE_DELAY", context), 2000,
-    "The second native hello must be delayed long enough to reproduce the manual sequence");
   const bridge = await send({ type: "bridge-status" });
   assert.equal(bridge.available, true);
   assert.equal(nativeHostName, "com.nickvision.parabolic");
-  assert.equal(nativeRequests[0].protocolVersion, 1);
+  assert.equal(nativeRequests[0].protocolVersion, 2);
   assert.equal(nativeRequests[0].type, "hello");
 
   const sender = {
@@ -162,13 +162,12 @@ async function send(message, sender = {}) {
   assert.equal(request.payload.mediaUrl, "");
   assert.equal(request.payload.preset, "720");
   assert.equal(request.payload.formatId, "22");
-  assert(nativeRequests.filter((item) => item.type === "hello").length >= 3,
-    "The download path must pulse the native loop twice without requiring a second menu click");
+  assert.equal(request.payload.priority, "normal");
 
   const helloCountBeforePulse = nativeRequests.filter((item) => item.type === "hello").length;
   const pulse = await send({ type: "bridge-pulse" }, sender);
   assert.equal(pulse.ok, true);
-  assert.equal(nativeRequests.filter((item) => item.type === "hello").length, helloCountBeforePulse + 2);
+  assert.equal(nativeRequests.filter((item) => item.type === "hello").length, helloCountBeforePulse + 1);
 
   const updateCheck = await send({ type: "native-ytdlp-check" }, sender);
   assert.equal(updateCheck.ok, true);
@@ -185,6 +184,23 @@ async function send(message, sender = {}) {
   assert(nativeRequests.some((item) => item.type === "cancel"
     && item.payload.downloadId === "download-test"));
 
+  const pause = await send({ type: "native-pause", downloadId: "download-test" }, sender);
+  assert.equal(pause.ok, true);
+  assert(nativeRequests.some((item) => item.type === "pause"));
+
+  const resume = await send({ type: "native-resume", downloadId: "download-test" }, sender);
+  assert.equal(resume.ok, true);
+  assert(nativeRequests.some((item) => item.type === "resume"));
+
+  const priority = await send({
+    type: "native-set-priority",
+    downloadId: "download-test",
+    priority: "high"
+  }, sender);
+  assert.equal(priority.ok, true);
+  assert(nativeRequests.some((item) => item.type === "set-priority"
+    && item.payload.priority === "high"));
+
   const openFolder = await send({ type: "native-open-folder", downloadId: "download-test" }, sender);
   assert.equal(openFolder.ok, true);
   assert(nativeRequests.some((item) => item.type === "open-folder"
@@ -192,7 +208,7 @@ async function send(message, sender = {}) {
 
   for (const listener of nativeMessageListeners) {
     listener({
-      protocolVersion: 1,
+      protocolVersion: 2,
       type: "event",
       payload: {
         downloadId: "download-test",

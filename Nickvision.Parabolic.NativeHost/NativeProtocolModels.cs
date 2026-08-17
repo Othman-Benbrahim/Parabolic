@@ -52,6 +52,7 @@ internal sealed class MediaRequest
     public string FormatId { get; set; } = string.Empty;
     public string SourceKind { get; set; } = string.Empty;
     public string FrameUrl { get; set; } = string.Empty;
+    public string Priority { get; set; } = "normal";
 }
 
 internal sealed class CancelRequest
@@ -62,6 +63,17 @@ internal sealed class CancelRequest
 internal sealed class OpenFolderRequest
 {
     public string DownloadId { get; set; } = string.Empty;
+}
+
+internal sealed class DownloadControlRequest
+{
+    public string DownloadId { get; set; } = string.Empty;
+}
+
+internal sealed class SetPriorityRequest
+{
+    public string DownloadId { get; set; } = string.Empty;
+    public string Priority { get; set; } = "normal";
 }
 
 internal sealed class FormatsResponse
@@ -83,6 +95,26 @@ internal sealed class DownloadResponse
 {
     public string DownloadId { get; set; } = string.Empty;
     public string Status { get; set; } = "queued";
+    public string Priority { get; set; } = "normal";
+}
+
+public sealed class DownloadSnapshot
+{
+    public string DownloadId { get; set; } = string.Empty;
+    public int TabId { get; set; } = -1;
+    public string Url { get; set; } = string.Empty;
+    public string Filename { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Priority { get; set; } = "normal";
+    public double? Progress { get; set; }
+    public string? Speed { get; set; }
+    public int? Eta { get; set; }
+    public string? Message { get; set; }
+}
+
+internal sealed class DownloadsResponse
+{
+    public IReadOnlyList<DownloadSnapshot> Downloads { get; set; } = [];
 }
 
 internal sealed class YtdlpUpdateResponse
@@ -98,7 +130,7 @@ internal sealed class EmptyPayload
 {
 }
 
-internal sealed class DownloadEventPayload
+public sealed class DownloadEventPayload
 {
     public string DownloadId { get; set; } = string.Empty;
     public int TabId { get; set; } = -1;
@@ -108,6 +140,7 @@ internal sealed class DownloadEventPayload
     public int? Eta { get; set; }
     public string? Filename { get; set; }
     public string? Message { get; set; }
+    public string Priority { get; set; } = "normal";
 }
 
 [JsonSourceGenerationOptions(
@@ -120,9 +153,13 @@ internal sealed class DownloadEventPayload
 [JsonSerializable(typeof(MediaRequest))]
 [JsonSerializable(typeof(CancelRequest))]
 [JsonSerializable(typeof(OpenFolderRequest))]
+[JsonSerializable(typeof(DownloadControlRequest))]
+[JsonSerializable(typeof(SetPriorityRequest))]
 [JsonSerializable(typeof(FormatsResponse))]
 [JsonSerializable(typeof(FormatChoice))]
 [JsonSerializable(typeof(DownloadResponse))]
+[JsonSerializable(typeof(DownloadSnapshot))]
+[JsonSerializable(typeof(DownloadsResponse))]
 [JsonSerializable(typeof(YtdlpUpdateResponse))]
 [JsonSerializable(typeof(EmptyPayload))]
 internal partial class NativeJsonContext : JsonSerializerContext

@@ -7,6 +7,7 @@ using Nickvision.Parabolic.Shared.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -69,7 +70,7 @@ public class DownloadService : IDisposable, IDownloadService
         }
     }
 
-    public async Task AddAsync(DownloadOptions options, bool excludeFromHistory)
+    public async Task<int> AddAsync(DownloadOptions options, bool excludeFromHistory)
     {
         var download = new Download(_configurationService, _translationService, _ytdlpService, options);
         _logger.LogDebug($"Adding download ({download.Id}): {JsonSerializer.Serialize(options, ApplicationJsonContext.Default.DownloadOptions)}");
@@ -88,7 +89,7 @@ public class DownloadService : IDisposable, IDownloadService
         {
             _logger.LogDebug($"Starting download ({download.Id}).");
             _downloading.Add(download.Id, download);
-            DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download.Id, download.FilePath, download.Options.Url, DownloadStatus.Running));
+            DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download));
             download.Start();
         }
         else
@@ -97,16 +98,19 @@ public class DownloadService : IDisposable, IDownloadService
             _queued.Add(download.Id, download);
             DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download));
         }
+        return download.Id;
     }
 
-    public async Task AddAsync(IReadOnlyList<DownloadOptions> options, bool excludeFromHistory)
+    public async Task<IReadOnlyList<int>> AddAsync(IReadOnlyList<DownloadOptions> options, bool excludeFromHistory)
     {
+        var ids = new List<int>(options.Count);
         var recoverableDownloads = new List<RecoverableDownload>();
         var historicDownloads = new List<HistoricDownload>();
         var downloadsToStart = new List<Download>();
         foreach (var option in options)
         {
             var download = new Download(_configurationService, _translationService, _ytdlpService, option);
+            ids.Add(download.Id);
             _logger.LogDebug($"Adding download ({download.Id}): {JsonSerializer.Serialize(option, ApplicationJsonContext.Default.DownloadOptions)}");
             download.Completed += Download_Completed;
             download.ProgressChanged += Download_ProgressChanged;
@@ -123,7 +127,7 @@ public class DownloadService : IDisposable, IDownloadService
             {
                 _logger.LogDebug($"Starting download ({download.Id}).");
                 _downloading.Add(download.Id, download);
-                DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download.Id, download.FilePath, download.Options.Url, DownloadStatus.Running));
+                DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download));
                 downloadsToStart.Add(download);
             }
             else
@@ -139,6 +143,7 @@ public class DownloadService : IDisposable, IDownloadService
         {
             download.Start();
         }
+        return ids;
     }
 
     public IReadOnlyList<int> ClearCompleted()
@@ -199,7 +204,7 @@ public class DownloadService : IDisposable, IDownloadService
         {
             options.Add(recoverableDownload.Options);
         }
-        await AddAsync(options, false);
+        await AddAsync(options, true);
     }
 
     public bool Resume(int id)
@@ -213,6 +218,18 @@ public class DownloadService : IDisposable, IDownloadService
         }
         _logger.LogWarning($"Unable to resume download ({id}), not found.");
         return false;
+    }
+
+    public async Task<bool> SetPriorityAsync(int id, DownloadPriority priority)
+    {
+        if (!_downloading.TryGetValue(id, out var download)
+            && !_queued.TryGetValue(id, out download))
+        {
+            _logger.LogWarning($"Unable to change priority for download ({id}), not found.");
+            return false;
+        }
+        download.Options.Priority = priority;
+        return await _recoveryService.UpdateAsync(new RecoverableDownload(download.Id, download.Options));
     }
 
     public async Task<bool> RetryAsync(int id)
@@ -370,10 +387,12 @@ public class DownloadService : IDisposable, IDownloadService
         DownloadCompleted?.Invoke(this, e);
         if (_queued.Count > 0 && _downloading.Count < _configurationService.MaxNumberOfActiveDownloads)
         {
-            using var queuedEnumerator = _queued.GetEnumerator();
-            if (queuedEnumerator.MoveNext())
+            var firstDownload = _queued.Values
+                .OrderByDescending(download => download.Options.Priority)
+                .ThenBy(download => download.Id)
+                .FirstOrDefault();
+            if (firstDownload is not null)
             {
-                var firstDownload = queuedEnumerator.Current.Value;
                 _downloading.Add(firstDownload.Id, firstDownload);
                 _queued.Remove(firstDownload.Id);
                 _logger.LogDebug($"Starting download from queue ({firstDownload.Id}).");
