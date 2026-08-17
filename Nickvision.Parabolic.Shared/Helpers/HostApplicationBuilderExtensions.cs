@@ -18,7 +18,7 @@ public static class HostApplicationBuilderExtensions
         {
             var appInfo = new AppInfo("org.nickvision.tubeconverter", "Nickvision Parabolic", "Parabolic")
             {
-                Version = new AppVersion("2026.8.4"),
+                Version = new AppVersion("2026.8.5"),
                 Changelog = """
                 - Added permalink-first resolution for Facebook, LinkedIn, and other Firefox pages
                 - Added N_m3u8DL-RE fallback for browser-detected non-DRM HLS and DASH streams

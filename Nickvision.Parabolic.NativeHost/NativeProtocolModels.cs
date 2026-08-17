@@ -49,6 +49,8 @@ internal sealed class MediaRequest
     public string MediaUrl { get; set; } = string.Empty;
     public string ManifestUrl { get; set; } = string.Empty;
     public string ManifestKind { get; set; } = string.Empty;
+    public string DirectFallbackUrl { get; set; } = string.Empty;
+    public string DirectFallbackKind { get; set; } = string.Empty;
     public string UserAgent { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Preset { get; set; } = "best";

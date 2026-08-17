@@ -64,7 +64,7 @@ const browser = {
       nativeHostName = name;
       return nativePort;
     },
-    getManifest() { return { version: "0.8.0" }; },
+    getManifest() { return { version: "0.8.1" }; },
     getURL(value) { return `moz-extension://test/${value}`; },
     onMessage: { addListener(listener) { runtimeMessageListeners.push(listener); } },
     onInstalled: { addListener() {} },
@@ -218,6 +218,34 @@ async function send(message, sender = {}) {
   assert.equal(facebookRequest.payload.pageUrl, "https://www.facebook.com/reel/123456789");
   assert.equal(facebookRequest.payload.manifestUrl, "https://video-cdn.example/playlist.m3u8?token=short-lived");
   assert.equal(facebookRequest.payload.manifestKind, "hls");
+
+  await send({
+    type: "media-detected",
+    candidates: [{
+      url: "https://video-cdn.example/facebook-progressive.mp4?token=short-lived",
+      pageUrl: "https://www.facebook.com/?_fb_noscript=1",
+      kind: "video",
+      size: 25 * 1024 * 1024,
+      source: "network"
+    }]
+  }, facebookSender);
+  const facebookDirectDownload = await send({
+    type: "native-download",
+    request: {
+      pageUrl: "https://www.facebook.com/?_fb_noscript=1",
+      frameUrl: "https://www.facebook.com/?_fb_noscript=1",
+      preset: "best",
+      sourceKind: "page"
+    }
+  }, facebookSender);
+  assert.equal(facebookDirectDownload.ok, true);
+  const facebookDirectRequest = nativeRequests.filter((item) => item.type === "download").at(-1);
+  assert.equal(facebookDirectRequest.payload.pageUrl, "https://www.facebook.com/");
+  assert.equal(
+    facebookDirectRequest.payload.directFallbackUrl,
+    "https://video-cdn.example/facebook-progressive.mp4?token=short-lived"
+  );
+  assert.equal(facebookDirectRequest.payload.directFallbackKind, "video");
 
   const mediaCatalog = await send({ type: "get-media", tabId: 42 }, sender);
   assert.equal(Object.hasOwn(mediaCatalog.settings, "cobaltAuthToken"), false);

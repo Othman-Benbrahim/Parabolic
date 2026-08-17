@@ -255,8 +255,11 @@ function permalinkScore(value) {
     if (/^\/(?:reel|videos)\/\d+/.test(path)
         || /\/videos\/\d+/.test(path)
         || /\/posts\//.test(path)
+        || /\/groups\/[^/]+\/(?:posts|permalink)\/\d+/.test(path)
         || path === "/watch/" && url.searchParams.has("v")
         || path === "/permalink.php" && url.searchParams.has("story_fbid")
+        || path === "/story.php" && url.searchParams.has("story_fbid")
+        || path === "/photo/" && url.searchParams.has("fbid")
         || /^\/share\/(?:v|r)\//.test(path)) {
       score += 200;
     }
@@ -318,6 +321,28 @@ function chooseRecentManifest(tabId, pageUrl, frameId) {
       score: (candidate.source === "network" ? 20 : 0)
         + (Number.isInteger(frameId) && candidate.frameId === frameId ? 50 : 0)
         + (pageUrl && candidate.pageUrl && isSameSite(pageUrl, candidate.pageUrl) ? 30 : 0)
+        + candidate.discoveredAt / 1_000_000_000_000
+    }))
+    .sort((left, right) => right.score - left.score);
+  return candidates[0]?.candidate || null;
+}
+
+function chooseRecentDirectMedia(tabId, pageUrl, frameId) {
+  if (!Number.isInteger(tabId)) {
+    return null;
+  }
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  const candidates = [...(mediaByTab.get(tabId)?.values() || [])]
+    .filter((candidate) => candidate.discoveredAt >= cutoff
+      && candidate.kind === "video"
+      && isHttpUrl(candidate.url)
+      && !isManifestUrl(candidate.url, candidate.kind))
+    .map((candidate) => ({
+      candidate,
+      score: (candidate.source === "network" ? 20 : 0)
+        + (Number.isInteger(frameId) && candidate.frameId === frameId ? 50 : 0)
+        + (pageUrl && candidate.pageUrl && isSameSite(pageUrl, candidate.pageUrl) ? 30 : 0)
+        + (Number.isFinite(candidate.size) ? Math.min(candidate.size / (1024 * 1024), 40) : 0)
         + candidate.discoveredAt / 1_000_000_000_000
     }))
     .sort((left, right) => right.score - left.score);
@@ -554,7 +579,10 @@ function normalizedDownloadPayload(message, sender) {
   const mediaUrl = isHttpUrl(source.mediaUrl) && !isManifestUrl(source.mediaUrl, source.sourceKind)
     ? source.mediaUrl
     : "";
-  if (!isHttpUrl(pageUrl) && !mediaUrl && !detectedManifest) {
+  const detectedDirectMedia = mediaUrl
+    ? null
+    : chooseRecentDirectMedia(tabId, pageUrl, sender.frameId);
+  if (!isHttpUrl(pageUrl) && !mediaUrl && !detectedManifest && !detectedDirectMedia) {
     throw new Error("No downloadable page or media URL was provided.");
   }
 
@@ -598,6 +626,8 @@ function normalizedDownloadPayload(message, sender) {
     mediaUrl,
     manifestUrl: detectedManifest?.url || "",
     manifestKind: detectedManifest?.kind || "",
+    directFallbackUrl: detectedDirectMedia?.url || "",
+    directFallbackKind: detectedDirectMedia?.kind || "",
     userAgent: String(source.userAgent || globalThis.navigator?.userAgent || "").slice(0, 500),
     title: String(source.title || sender.tab?.title || "Media").slice(0, 500),
     preset,

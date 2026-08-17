@@ -264,8 +264,11 @@
       if (/^\/(?:reel|videos)\/\d+/.test(path)
           || /\/videos\/\d+/.test(path)
           || /\/posts\//.test(path)
+          || /\/groups\/[^/]+\/(?:posts|permalink)\/\d+/.test(path)
           || (path === "/watch/" && parsed.searchParams.has("v"))
           || (path === "/permalink.php" && parsed.searchParams.has("story_fbid"))
+          || (path === "/story.php" && parsed.searchParams.has("story_fbid"))
+          || (path === "/photo/" && parsed.searchParams.has("fbid"))
           || /^\/share\/(?:v|r)\//.test(path)) {
         return 300;
       }
@@ -280,6 +283,39 @@
     return path === "/" ? 0 : 20;
   }
 
+  function facebookVideoIdCandidates(container) {
+    if (!container || !/facebook\.com$/i.test(location.hostname)) {
+      return [];
+    }
+    const candidates = [];
+    for (const attribute of ["data-video-id", "data-videoid", "data-store", "data-ft"]) {
+      const value = container.getAttribute?.(attribute) || "";
+      const match = value.match(/(?:video_?id|videoID)?[\\\"':=\s]+(\d{5,})/i)
+        || (attribute.includes("video") ? value.match(/^(\d{5,})$/) : null);
+      if (match?.[1]) {
+        candidates.push(`https://www.facebook.com/watch/?v=${match[1]}`);
+      }
+    }
+
+    // Facebook often keeps the post id only in escaped JSON attached to the
+    // player/article. Limit the inspected markup so a large feed cannot stall.
+    const markup = String(container.outerHTML || "").slice(0, 1_500_000);
+    const patterns = [
+      /data-video-id=["'](\d{5,})["']/gi,
+      /(?:video_id|videoID)(?:\\?"|')?\s*[:=]\s*(?:\\?"|')?(\d{5,})/gi,
+      /(?:watch\/\?v=|\/videos\/)(\d{5,})/gi
+    ];
+    for (const pattern of patterns) {
+      for (const match of markup.matchAll(pattern)) {
+        candidates.push(`https://www.facebook.com/watch/?v=${match[1]}`);
+        if (candidates.length >= 12) {
+          return candidates;
+        }
+      }
+    }
+    return candidates;
+  }
+
   function findMediaPermalink() {
     const candidates = [
       location.href,
@@ -287,15 +323,36 @@
       document.querySelector('meta[property="og:url"]')?.content
     ];
 
+    const containers = [];
+    const seenContainers = new Set();
+    const addContainer = (container) => {
+      if (container && !seenContainers.has(container)) {
+        seenContainers.add(container);
+        containers.push(container);
+      }
+    };
+    addContainer(primaryMedia?.closest?.('[role="article"]'));
+    addContainer(primaryMedia?.closest?.('[role="dialog"]'));
+    addContainer(primaryMedia?.closest?.('[data-pagelet*="FeedUnit"], [data-pagelet*="Reels"]'));
     let container = primaryMedia;
-    for (let depth = 0; container && depth < 8; depth += 1, container = container.parentElement) {
-      for (const anchor of container.querySelectorAll?.("a[href]") || []) {
+    for (let depth = 0; container && depth < 16; depth += 1, container = container.parentElement) {
+      addContainer(container);
+    }
+
+    for (const candidateContainer of containers) {
+      let anchorCount = 0;
+      for (const anchor of candidateContainer.querySelectorAll?.("a[href]") || []) {
         if (permalinkScore(anchor.href) >= 300) {
           candidates.push(anchor.href);
         }
+        anchorCount += 1;
+        if (anchorCount >= 300) {
+          break;
+        }
       }
-      const activityUrn = container.getAttribute?.("data-urn")
-        || container.getAttribute?.("data-activity-urn");
+      candidates.push(...facebookVideoIdCandidates(candidateContainer));
+      const activityUrn = candidateContainer.getAttribute?.("data-urn")
+        || candidateContainer.getAttribute?.("data-activity-urn");
       if (/^urn:li:(?:activity|ugcpost):/i.test(activityUrn || "")) {
         candidates.push(`https://www.linkedin.com/feed/update/${activityUrn}`);
       }
@@ -587,7 +644,8 @@
       const response = await browser.runtime.sendMessage({ type: "bridge-status" });
       if (response?.available) {
         bridgeIndicator.dataset.status = "ready";
-        bridgeIndicator.textContent = "App ready";
+        const appVersion = response.host?.appVersion || response.appVersion || "";
+        bridgeIndicator.textContent = appVersion ? `App ${appVersion}` : "App ready";
       } else {
         bridgeIndicator.dataset.status = "missing";
         bridgeIndicator.textContent = "App update required";

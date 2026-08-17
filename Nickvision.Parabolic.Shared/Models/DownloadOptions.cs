@@ -44,6 +44,7 @@ public class DownloadOptions
     public int SocketTimeoutSeconds { get; set; }
     public Uri? FallbackUrl { get; set; }
     public Uri? ManifestFallbackUrl { get; set; }
+    public Uri? DirectFallbackUrl { get; set; }
     public string DownloadEngine { get; set; }
     public string RenewalMode { get; set; }
     public Uri? RenewalEndpoint { get; set; }
@@ -88,6 +89,7 @@ public class DownloadOptions
         SocketTimeoutSeconds = 20;
         FallbackUrl = null;
         ManifestFallbackUrl = null;
+        DirectFallbackUrl = null;
         DownloadEngine = "yt-dlp";
         RenewalMode = "none";
         RenewalEndpoint = null;

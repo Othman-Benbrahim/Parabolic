@@ -34,6 +34,7 @@ public partial class Download : IDisposable
     private int _currentProcessLogStart;
     private bool _urlRenewed;
     private bool _manifestFallbackUsed;
+    private bool _directFallbackUsed;
 
     public int Id { get; }
     public DownloadOptions Options { get; }
@@ -64,6 +65,7 @@ public partial class Download : IDisposable
         _currentProcessLogStart = 0;
         _urlRenewed = false;
         _manifestFallbackUsed = string.Equals(options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase);
+        _directFallbackUsed = string.Equals(options.ResolverName, "direct-fallback", StringComparison.OrdinalIgnoreCase);
         Id = _nextId++;
         Options = options;
         FilePath = Path.Combine(Options.SaveFolder, $"{Options.SaveFilename}{Options.FileType.DotExtension}");
@@ -267,6 +269,10 @@ public partial class Download : IDisposable
         {
             return;
         }
+        else if (Status == DownloadStatus.Error && await TryRestartWithDirectFallbackAsync())
+        {
+            return;
+        }
         else if (Status == DownloadStatus.Error && await TryRestartAfterNetworkFailureAsync())
         {
             return;
@@ -336,6 +342,45 @@ public partial class Download : IDisposable
         return true;
     }
 
+    private async Task<bool> TryRestartWithDirectFallbackAsync()
+    {
+        if (_directFallbackUsed || Options.DirectFallbackUrl is null || Options.FileType.IsAudio)
+        {
+            return false;
+        }
+
+        var log = CurrentProcessLog;
+        var extractionFailure = string.Equals(Options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("Unsupported URL", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("Unable to extract", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("No video formats", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("HTTP Error 401", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("HTTP Error 410", StringComparison.OrdinalIgnoreCase);
+        if (!extractionFailure)
+        {
+            return false;
+        }
+
+        Options.Url = Options.DirectFallbackUrl;
+        Options.DirectFallbackUrl = null;
+        Options.ManifestFallbackUrl = null;
+        Options.FallbackUrl = null;
+        Options.DownloadEngine = "yt-dlp";
+        Options.ResolverName = "direct-fallback";
+        Options.SourceKind = "video";
+        Options.RenewalMode = "none";
+        _directFallbackUsed = true;
+        const string message = "Page extraction failed; retrying the direct MP4/video stream detected by Firefox...";
+        _logBuilder.AppendLine(message);
+        ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, message.AsMemory(), double.NaN, 0.0, 0));
+        DisposeProcess();
+        Status = DownloadStatus.Queued;
+        await Task.Delay(250);
+        Start();
+        return true;
+    }
+
     private async Task<bool> TryRestartAfterNetworkFailureAsync()
     {
         const int maxProcessRestarts = 2;
@@ -363,6 +408,7 @@ public partial class Download : IDisposable
 
         if (temporaryUrlFailure
             && Options.FallbackUrl is not null
+            && !string.Equals(Options.ResolverName, "direct-fallback", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(Options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase))
         {
             Options.Url = Options.FallbackUrl;

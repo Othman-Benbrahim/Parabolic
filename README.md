@@ -20,7 +20,7 @@
 </div>
 
 > [!NOTE]
-> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Version **2026.8.4** adds permalink-first social-video resolution and a bundled N_m3u8DL-RE fallback to the Firefox-only download-manager roadmap, coordinated with Firefox add-on **0.8.0**. Validate the Windows setup and unsigned add-on before publishing the final GitHub Release.
+> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Version **2026.8.5** strengthens permalink-first social-video resolution and adds Firefox-observed MP4 fallback after the bundled N_m3u8DL-RE path, coordinated with Firefox add-on **0.8.1**. Validate the Windows setup and unsigned add-on before publishing the final GitHub Release.
 
 ## ✨ Features
 
@@ -76,7 +76,7 @@ Download versioned packages from this repository's [Releases](https://github.com
 1. Download the x64 or ARM64 setup executable for your computer.
 2. Close Firefox and Parabolic.
 3. Run the installer. It can be installed over an earlier adapted build.
-4. Install Firefox add-on `0.8.0`, then reload the video page.
+4. Install Firefox add-on `0.8.1`, then reload the video page.
 
 Use the installer rather than the portable archive when you want the Firefox bridge.
 

@@ -102,8 +102,8 @@ public sealed class NativeMessagingServer : IDisposable
                 case "hello":
                     await SendSuccessAsync(request.RequestId, new HelloResponse
                     {
-                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.4",
-                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
+                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.5",
+                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "direct-stream-fallback", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
                     }, NativeJsonContext.Default.HelloResponse, cancellationToken);
                     break;
                 case "get-formats":
@@ -319,6 +319,7 @@ public sealed class NativeMessagingServer : IDisposable
         CancellationToken cancellationToken)
     {
         var hasManifest = TryGetManifestUrl(request, out var manifestUrl);
+        var hasDirectFallback = TryGetDirectFallbackUrl(request, out var directFallbackUrl);
         if (request.ResolverPreference == "auto")
         {
             var direct = await _directResolver.ResolveAsync(request, cancellationToken);
@@ -334,15 +335,30 @@ public sealed class NativeMessagingServer : IDisposable
             // Social pages are resolved from their durable permalink first. If
             // yt-dlp cannot extract that page, Download will switch to this
             // browser-observed HLS/DASH manifest with N_m3u8DL-RE.
-            if (hasManifest && TryGetStablePageUrl(request, out _))
+            if ((hasManifest || hasDirectFallback) && TryGetStablePageUrl(request, out _))
             {
                 var permalinkOptions = BuildDirectDownloadOptions(request);
-                AttachManifestFallback(permalinkOptions, request, manifestUrl, scheduledAt);
+                if (hasManifest)
+                {
+                    AttachManifestFallback(permalinkOptions, request, manifestUrl, scheduledAt);
+                }
+                if (hasDirectFallback)
+                {
+                    AttachDirectFallback(permalinkOptions, request, directFallbackUrl, scheduledAt);
+                }
                 return permalinkOptions;
             }
             if (hasManifest)
             {
                 return BuildManifestDownloadOptions(request, manifestUrl);
+            }
+            if (hasDirectFallback)
+            {
+                return BuildResolvedDownloadOptions(request, new ResolvedMedia(
+                    directFallbackUrl,
+                    request.Title,
+                    "direct-fallback",
+                    "video"));
             }
         }
 
@@ -381,6 +397,10 @@ public sealed class NativeMessagingServer : IDisposable
         if (request.ResolverPreference == "auto" && hasManifest)
         {
             AttachManifestFallback(options, request, manifestUrl, scheduledAt);
+        }
+        if (request.ResolverPreference == "auto" && hasDirectFallback)
+        {
+            AttachDirectFallback(options, request, directFallbackUrl, scheduledAt);
         }
         return options;
     }
@@ -554,6 +574,23 @@ public sealed class NativeMessagingServer : IDisposable
         }
     }
 
+    private static void AttachDirectFallback(
+        DownloadOptions options,
+        MediaRequest request,
+        Uri directFallbackUrl,
+        DateTimeOffset? scheduledAt)
+    {
+        if (request.Preset == "audio")
+        {
+            return;
+        }
+        options.DirectFallbackUrl = directFallbackUrl;
+        if (scheduledAt.HasValue && LooksTemporaryUrl(directFallbackUrl))
+        {
+            options.DirectFallbackUrl = null;
+        }
+    }
+
     private DownloadOptions BuildResolvedDownloadOptions(MediaRequest request, ResolvedMedia resolved)
     {
         var rawTitle = string.IsNullOrWhiteSpace(resolved.Filename) ? request.Title : resolved.Filename;
@@ -650,6 +687,7 @@ public sealed class NativeMessagingServer : IDisposable
         options.HttpUserAgent = request.UserAgent;
         if ((request.SendPageReferer
                 || options.ManifestFallbackUrl is not null
+                || options.DirectFallbackUrl is not null
                 || string.Equals(options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase))
             && TryGetStablePageUrl(request, out var referer))
         {
@@ -702,6 +740,17 @@ public sealed class NativeMessagingServer : IDisposable
                 || candidate.AbsolutePath.EndsWith(".mpd", StringComparison.OrdinalIgnoreCase)))
         {
             uri = candidate;
+            return true;
+        }
+        uri = null!;
+        return false;
+    }
+
+    private static bool TryGetDirectFallbackUrl(MediaRequest request, out Uri uri)
+    {
+        if (request.DirectFallbackKind == "video"
+            && DirectMediaResolver.TryCreateHttpUri(request.DirectFallbackUrl, out uri))
+        {
             return true;
         }
         uri = null!;
