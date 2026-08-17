@@ -12,7 +12,6 @@ persistent download manager.
 - Added High, Normal and Low queue priorities.
 - Added pause, resume, cancellation, reprioritization and active-queue synchronization commands.
 - Upgraded the Firefox integration to Native Messaging protocol v2.
-- Allowed the non-elevated Firefox host to reach the per-user service even when the installer started it elevated.
 - Removed the previous double-handshake delay after starting a download.
 - Updated the Firefox add-on to Parabolic Download Manager 0.5.0.
 

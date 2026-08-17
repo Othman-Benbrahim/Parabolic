@@ -8,8 +8,6 @@ using Nickvision.Parabolic.Shared.Services;
 using System;
 using System.Collections.Generic;
 using System.IO.Pipes;
-using System.Security.AccessControl;
-using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -79,7 +77,12 @@ internal static class Program
         var clients = new List<Task>();
         while (!cancellationToken.IsCancellationRequested)
         {
-            var pipe = CreatePipeServer();
+            var pipe = new NamedPipeServerStream(
+                DaemonProtocol.PipeName,
+                PipeDirection.InOut,
+                NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
             try
             {
                 await pipe.WaitForConnectionAsync(cancellationToken);
@@ -93,35 +96,6 @@ internal static class Program
             clients.Add(HandleClientAsync(pipe, services, coordinator, cancellationToken));
         }
         await Task.WhenAll(clients);
-    }
-
-    private static NamedPipeServerStream CreatePipeServer()
-    {
-        // PipeOptions.CurrentUserOnly also requires the client and server to
-        // have the same Windows elevation level. Firefox normally launches
-        // Native Messaging hosts without elevation, while an installer may
-        // have started this per-user service elevated. Use an explicit ACL so
-        // both processes can communicate while still restricting the pipe to
-        // the Windows account that owns the service.
-        using var identity = WindowsIdentity.GetCurrent(TokenAccessLevels.Query);
-        var user = identity.User
-            ?? throw new InvalidOperationException("Unable to identify the Windows user for the Parabolic pipe.");
-        var security = new PipeSecurity();
-        security.SetAccessRuleProtection(true, false);
-        security.SetOwner(user);
-        security.AddAccessRule(new PipeAccessRule(
-            user,
-            PipeAccessRights.FullControl,
-            AccessControlType.Allow));
-        return NamedPipeServerStreamAcl.Create(
-            DaemonProtocol.PipeName,
-            PipeDirection.InOut,
-            NamedPipeServerStream.MaxAllowedServerInstances,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous,
-            0,
-            0,
-            security);
     }
 
     private static async Task HandleClientAsync(

@@ -28,7 +28,7 @@ After the x64 Windows workflow succeeds:
 
 1. install `NickvisionParabolicSetup.exe` over version 2026.8.0;
 2. load the unsigned 0.5.0 XPI temporarily in Firefox;
-3. confirm the popup reports protocol v2 and the persistent queue capability while Firefox is not elevated;
+3. confirm the popup reports protocol v2 and the persistent queue capability;
 4. start a large download, close Firefox completely, and confirm the file keeps growing;
 5. reopen Firefox and confirm the bridge reconnects;
 6. interrupt the service or restart Windows, then verify the partial download resumes;
