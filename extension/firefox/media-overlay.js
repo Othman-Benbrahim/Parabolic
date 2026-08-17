@@ -253,12 +253,68 @@
     return best;
   }
 
+  function permalinkScore(value) {
+    const url = normalizeMediaUrl(value);
+    if (!url) {
+      return -1;
+    }
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+    if (/facebook\.com$/i.test(parsed.hostname)) {
+      if (/^\/(?:reel|videos)\/\d+/.test(path)
+          || /\/videos\/\d+/.test(path)
+          || /\/posts\//.test(path)
+          || (path === "/watch/" && parsed.searchParams.has("v"))
+          || (path === "/permalink.php" && parsed.searchParams.has("story_fbid"))
+          || /^\/share\/(?:v|r)\//.test(path)) {
+        return 300;
+      }
+    }
+    if (/linkedin\.com$/i.test(parsed.hostname)) {
+      if (/^\/feed\/update\/urn:li:(?:activity|ugcpost):/i.test(parsed.pathname)
+          || /\/posts\//.test(path)
+          || /\/pulse\//.test(path)) {
+        return 300;
+      }
+    }
+    return path === "/" ? 0 : 20;
+  }
+
+  function findMediaPermalink() {
+    const candidates = [
+      location.href,
+      document.querySelector('link[rel="canonical"]')?.href,
+      document.querySelector('meta[property="og:url"]')?.content
+    ];
+
+    let container = primaryMedia;
+    for (let depth = 0; container && depth < 8; depth += 1, container = container.parentElement) {
+      for (const anchor of container.querySelectorAll?.("a[href]") || []) {
+        if (permalinkScore(anchor.href) >= 300) {
+          candidates.push(anchor.href);
+        }
+      }
+      const activityUrn = container.getAttribute?.("data-urn")
+        || container.getAttribute?.("data-activity-urn");
+      if (/^urn:li:(?:activity|ugcpost):/i.test(activityUrn || "")) {
+        candidates.push(`https://www.linkedin.com/feed/update/${activityUrn}`);
+      }
+    }
+
+    return candidates
+      .map((value, index) => ({ value: normalizeMediaUrl(value), score: permalinkScore(value), index }))
+      .filter((candidate) => candidate.value)
+      .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.value
+      || location.href;
+  }
+
   function buildRequest(preset, formatId = "", scheduledAt = "") {
     const mediaUrl = normalizeMediaUrl(primaryMedia?.currentSrc || primaryMedia?.src);
     return {
-      pageUrl: location.href,
+      pageUrl: findMediaPermalink(),
       frameUrl: location.href,
       mediaUrl,
+      userAgent: navigator.userAgent,
       title: primaryMedia?.getAttribute("title")
         || primaryMedia?.getAttribute("aria-label")
         || document.title

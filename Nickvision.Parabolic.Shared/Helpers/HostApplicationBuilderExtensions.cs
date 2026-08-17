@@ -18,8 +18,11 @@ public static class HostApplicationBuilderExtensions
         {
             var appInfo = new AppInfo("org.nickvision.tubeconverter", "Nickvision Parabolic", "Parabolic")
             {
-                Version = new AppVersion("2026.8.3"),
+                Version = new AppVersion("2026.8.4"),
                 Changelog = """
+                - Added permalink-first resolution for Facebook, LinkedIn, and other Firefox pages
+                - Added N_m3u8DL-RE fallback for browser-detected non-DRM HLS and DASH streams
+                - Added automatic Firefox User-Agent and stream Referer forwarding for manifest downloads
                 - Added renewal of temporary Cobalt URLs when scheduled downloads actually start
                 - Added stable-page fallback when direct CDN URLs expire
                 - Added conservative, balanced, and aggressive network/CDN retry strategies
@@ -62,6 +65,7 @@ public static class HostApplicationBuilderExtensions
             builder.Services.AddSingleton<IRecoveryService, RecoveryService>();
             builder.Services.AddSingleton<IThumbnailService, ThumbnailService>();
             builder.Services.AddSingleton<IYtdlpExecutableService, YtdlpExecutableService>();
+            builder.Services.AddSingleton<INm3u8dlExecutableService, Nm3u8dlExecutableService>();
             builder.Services.AddSingleton<IUrlRenewalService, UrlRenewalService>();
             builder.Services.AddTransient<AddDownloadDialogController>();
             builder.Services.AddTransient<HistoryViewController>();

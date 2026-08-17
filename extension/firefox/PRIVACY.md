@@ -9,7 +9,7 @@ Parabolic Download Manager is a Firefox extension that detects downloadable medi
 The extension may process the following information in the browser:
 
 - the URL and title of the current page;
-- detected media URLs and basic media information, such as content type;
+- detected media URLs, HLS/DASH manifest URLs, the browser User-Agent, and basic media information such as content type;
 - the download preset, quality, format, and priority selected by the user;
 - an optional scheduled start time and bandwidth limit;
 - the chosen network strategy, proxy mode, authentication mode, and optional page-referrer preference;
@@ -25,11 +25,11 @@ When the user explicitly asks to list formats, start or cancel a download, or op
 
 The extension also exchanges its extension version and Native Messaging protocol version with the local Parabolic host to verify compatibility. This compatibility exchange does not include browsing history or page content.
 
-To analyze and download the requested media, Parabolic and its download components, including yt-dlp, connect to the website or media provider selected by the user. When the user requests a yt-dlp update check or update, Parabolic contacts the relevant official update source.
+To analyze and download the requested media, Parabolic and its download components, including yt-dlp and N_m3u8DL-RE, connect to the website or media provider selected by the user. N_m3u8DL-RE is used only as a fallback for an HLS or DASH manifest already detected by Firefox. When the user requests a yt-dlp update check or update, Parabolic contacts the relevant official update source.
 
 If the user explicitly configures Cobalt, the requested page URL and selected quality are sent to that Cobalt instance to obtain a downloadable media URL. If authentication is configured, the token is sent only to that endpoint. Parabolic does not automatically use the official shared Cobalt API.
 
-If the user explicitly selects `Use Firefox session`, the local Parabolic process invokes yt-dlp's Firefox-cookie support. The extension does not read, copy, receive, or transmit the cookie values. If page-referrer forwarding is enabled, the requested page URL is sent as the HTTP `Referer` header only to the selected media provider.
+If the user explicitly selects `Use Firefox session`, the local Parabolic process invokes yt-dlp's Firefox-cookie support. The extension does not read, copy, receive, or transmit the cookie values. If page-referrer forwarding is enabled, the requested page URL is sent as the HTTP `Referer` header only to the selected media provider. For a browser-detected HLS/DASH fallback, Parabolic automatically sends that same page URL as the stream `Referer` and the Firefox User-Agent because many media CDNs require the browser request context. No cookie header is captured or forwarded to N_m3u8DL-RE.
 
 ## Purpose and legal basis
 
@@ -84,7 +84,7 @@ Parabolic Download Manager est une extension Firefox qui détecte les médias t�
 L'extension peut traiter les informations suivantes dans le navigateur :
 
 - l'adresse et le titre de la page courante ;
-- les adresses des médias détectés et certaines informations techniques, comme leur type de contenu ;
+- les adresses des médias et manifestes HLS/DASH détectés, l'agent utilisateur de Firefox et certaines informations techniques, comme le type de contenu ;
 - le préréglage, la qualité, le format et la priorité choisis par l'utilisateur ;
 - une éventuelle date de démarrage programmée et une limite de bande passante ;
 - la stratégie réseau, le mode proxy, le mode d'authentification et l'éventuelle autorisation d'envoyer la page comme référent HTTP ;
@@ -100,11 +100,11 @@ Lorsque l'utilisateur demande explicitement d'afficher les formats, de démarrer
 
 L'extension échange également sa version et la version du protocole Native Messaging avec le pont Parabolic local afin de vérifier leur compatibilité. Cet échange de compatibilité ne contient ni historique de navigation ni contenu de page.
 
-Pour analyser et télécharger le média demandé, Parabolic et ses composants de téléchargement, notamment yt-dlp, se connectent au site ou au fournisseur de médias choisi par l'utilisateur. Lorsque l'utilisateur demande une vérification ou une mise à jour de yt-dlp, Parabolic contacte la source officielle correspondante.
+Pour analyser et télécharger le média demandé, Parabolic et ses composants de téléchargement, notamment yt-dlp et N_m3u8DL-RE, se connectent au site ou au fournisseur de médias choisi par l'utilisateur. N_m3u8DL-RE n'est utilisé qu'en solution de secours pour un manifeste HLS ou DASH déjà détecté par Firefox. Lorsque l'utilisateur demande une vérification ou une mise à jour de yt-dlp, Parabolic contacte la source officielle correspondante.
 
 Si l'utilisateur configure explicitement Cobalt, l'adresse de la page demandée et la qualité choisie sont transmises à cette instance Cobalt afin d'obtenir une adresse de média téléchargeable. Si une authentification est configurée, le jeton est envoyé uniquement à ce point d'accès. Parabolic n'utilise pas automatiquement l'API Cobalt partagée officielle.
 
-Si l'utilisateur choisit explicitement « Utiliser la session Firefox », le processus Parabolic local utilise la prise en charge des cookies Firefox de yt-dlp. L'extension ne lit, ne copie, ne reçoit et ne transmet jamais les valeurs des cookies. Si l'envoi du référent HTTP est activé, l'adresse de la page demandée est envoyée comme en-tête `Referer` uniquement au fournisseur du média sélectionné.
+Si l'utilisateur choisit explicitement « Utiliser la session Firefox », le processus Parabolic local utilise la prise en charge des cookies Firefox de yt-dlp. L'extension ne lit, ne copie, ne reçoit et ne transmet jamais les valeurs des cookies. Si l'envoi du référent HTTP est activé, l'adresse de la page demandée est envoyée comme en-tête `Referer` uniquement au fournisseur du média sélectionné. Pour un secours HLS/DASH détecté dans le navigateur, Parabolic transmet automatiquement cette même page comme `Referer` ainsi que l'agent utilisateur de Firefox, car de nombreux CDN exigent ce contexte de requête. Aucun en-tête de cookie n'est capturé ni transmis à N_m3u8DL-RE.
 
 ## Finalité du traitement
 

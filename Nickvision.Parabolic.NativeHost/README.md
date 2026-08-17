@@ -1,6 +1,6 @@
 # Parabolic Firefox Native Host
 
-`Nickvision.Parabolic.NativeHost` implements protocol version 2 from
+`Nickvision.Parabolic.NativeHost` implements protocol version 3 from
 `extension/firefox/NATIVE-MESSAGING-PROTOCOL.md` for Windows.
 
 It is a short-lived windowless relay launched by Firefox. It starts the
@@ -24,6 +24,11 @@ pipe, then copies Firefox Native Messaging frames in both directions.
 The persistent service emits progress and final state as asynchronous events.
 The update commands remain explicit and are refused while downloads are active
 or queued.
+
+For automatic Firefox downloads, the service tries the durable page permalink
+with yt-dlp first. If extraction fails and Firefox supplied a recent HLS/DASH
+manifest, it starts the bundled N_m3u8DL-RE executable without requesting DRM
+keys. The Windows installer supplies the architecture-matched executable.
 
 ## Publish and smoke test
 

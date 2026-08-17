@@ -122,7 +122,9 @@ function renderCandidate(candidate) {
   button.textContent = "Download";
   button.addEventListener("click", () => startDownload({
     pageUrl: activeTab.url,
-    mediaUrl: candidate.kind === "youtube" ? "" : candidate.url,
+    mediaUrl: candidate.kind === "youtube" || ["hls", "dash"].includes(candidate.kind) ? "" : candidate.url,
+    manifestUrl: ["hls", "dash"].includes(candidate.kind) ? candidate.url : "",
+    manifestKind: ["hls", "dash"].includes(candidate.kind) ? candidate.kind : "",
     title: candidateTitle(candidate),
     preset: currentSettings.quickDownloadPreset,
     priority: currentSettings.defaultPriority,

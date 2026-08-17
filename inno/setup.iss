@@ -4,7 +4,7 @@
 #define MyAppName            "Nickvision Parabolic"
 #define MyAppShortName       "Parabolic"
 #define MyAppShortNameLower  "parabolic"
-#define MyAppVersion         "2026.8.3"
+#define MyAppVersion         "2026.8.4"
 #define MyAppPublisher       "Nickvision"
 #define MyAppURL             "https://nickvision.org"
 #define MyAppExeName         "Nickvision.Parabolic.WinUI.exe"
@@ -85,6 +85,8 @@ Source: "ffmpeg.exe"; DestDir: "{app}\Release"; Flags: ignoreversion
 Source: "ffplay.exe"; DestDir: "{app}\Release"; Flags: ignoreversion
 Source: "ffprobe.exe"; DestDir: "{app}\Release"; Flags: ignoreversion
 Source: "deno.exe"; DestDir: "{app}\Release"; Flags: ignoreversion
+Source: "N_m3u8DL-RE.exe"; DestDir: "{app}\Release"; Flags: ignoreversion
+Source: "..\resources\licenses\N_m3u8DL-RE-LICENSE.txt"; DestDir: "{app}\Release"; Flags: ignoreversion
 Source: "..\{#GetEnv('APP_FILES_PATH')}\{#MyAppExeName}"; DestDir: "{app}\Release"; Flags: ignoreversion
 Source: "..\{#GetEnv('APP_FILES_PATH')}\*"; DestDir: "{app}\Release"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\{#GetEnv('NATIVE_HOST_FILES_PATH')}\*"; DestDir: "{app}\Release"; Flags: ignoreversion recursesubdirs createallsubdirs

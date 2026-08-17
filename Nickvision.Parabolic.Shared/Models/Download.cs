@@ -9,7 +9,9 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,13 +24,16 @@ public partial class Download : IDisposable
     private readonly IConfigurationService _configurationService;
     private readonly ITranslationService _translationService;
     private readonly IYtdlpExecutableService _ytdlpExecutableService;
+    private readonly INm3u8dlExecutableService _nm3u8dlExecutableService;
     private readonly IUrlRenewalService _urlRenewalService;
     private readonly StringBuilder _logBuilder;
     private bool _removeSourceData;
     private Process? _process;
     private int _progressSkipCounter;
     private int _processRestartCount;
+    private int _currentProcessLogStart;
     private bool _urlRenewed;
+    private bool _manifestFallbackUsed;
 
     public int Id { get; }
     public DownloadOptions Options { get; }
@@ -44,18 +49,21 @@ public partial class Download : IDisposable
         _nextId = 0;
     }
 
-    public Download(IConfigurationService configurationService, ITranslationService translationService, IYtdlpExecutableService ytdlpExecutableService, IUrlRenewalService urlRenewalService, DownloadOptions options)
+    public Download(IConfigurationService configurationService, ITranslationService translationService, IYtdlpExecutableService ytdlpExecutableService, INm3u8dlExecutableService nm3u8dlExecutableService, IUrlRenewalService urlRenewalService, DownloadOptions options)
     {
         _configurationService = configurationService;
         _translationService = translationService;
         _ytdlpExecutableService = ytdlpExecutableService;
+        _nm3u8dlExecutableService = nm3u8dlExecutableService;
         _urlRenewalService = urlRenewalService;
         _logBuilder = new StringBuilder();
         _removeSourceData = false;
         _process = null;
         _progressSkipCounter = 0;
         _processRestartCount = 0;
+        _currentProcessLogStart = 0;
         _urlRenewed = false;
+        _manifestFallbackUsed = string.Equals(options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase);
         Id = _nextId++;
         Options = options;
         FilePath = Path.Combine(Options.SaveFolder, $"{Options.SaveFilename}{Options.FileType.DotExtension}");
@@ -118,7 +126,10 @@ public partial class Download : IDisposable
                 _urlRenewed = true;
             }
             _removeSourceData = _configurationService.RemoveSourceData;
-            _process = _ytdlpExecutableService.GetDownloadProcess(Options);
+            _currentProcessLogStart = _logBuilder.Length;
+            _process = string.Equals(Options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase)
+                ? _nm3u8dlExecutableService.GetDownloadProcess(Options)
+                : _ytdlpExecutableService.GetDownloadProcess(Options);
             Status = DownloadStatus.Running;
             _process.Exited += Process_Exited;
             _process.OutputDataReceived += Process_OutputDataReceived;
@@ -186,6 +197,16 @@ public partial class Download : IDisposable
                     }
                     endIndex = startIndex == -1 ? 0 : startIndex;
                 }
+                if ((!File.Exists(finalPath))
+                    && string.Equals(Options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase)
+                    && Directory.Exists(Options.SaveFolder))
+                {
+                    finalPath = Directory.EnumerateFiles(Options.SaveFolder, $"{Options.SaveFilename}*.*")
+                        .Where(path => path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+                            || path.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
+                        .OrderByDescending(File.GetLastWriteTimeUtc)
+                        .FirstOrDefault() ?? string.Empty;
+                }
                 if (!string.IsNullOrEmpty(finalPath) && File.Exists(finalPath))
                 {
                     FilePath = finalPath;
@@ -242,9 +263,21 @@ public partial class Download : IDisposable
             }
             catch { }
         }
+        else if (Status == DownloadStatus.Error && await TryRestartWithManifestFallbackAsync())
+        {
+            return;
+        }
         else if (Status == DownloadStatus.Error && await TryRestartAfterNetworkFailureAsync())
         {
             return;
+        }
+        if (Status == DownloadStatus.Error
+            && string.Equals(Options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase)
+            && ContainsDrmIndicator(CurrentProcessLog))
+        {
+            const string drmMessage = "This HLS/DASH fallback appears to be DRM-protected. Parabolic does not request, store, or use decryption keys.";
+            _logBuilder.AppendLine(drmMessage);
+            ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, drmMessage.AsMemory(), double.NaN, 0.0, 0));
         }
         ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, ReadOnlyMemory<char>.Empty));
         Completed?.Invoke(this, new DownloadCompletedEventArgs(Id, Status, FilePath, Log.AsMemory(), true));
@@ -258,6 +291,51 @@ public partial class Download : IDisposable
         }
     }
 
+    private static bool ContainsDrmIndicator(string log) =>
+        log.Contains("DRM", StringComparison.OrdinalIgnoreCase)
+        || log.Contains("ContentProtection", StringComparison.OrdinalIgnoreCase)
+        || log.Contains("PSSH", StringComparison.OrdinalIgnoreCase)
+        || log.Contains("decryption key", StringComparison.OrdinalIgnoreCase)
+        || log.Contains("SAMPLE-AES", StringComparison.OrdinalIgnoreCase)
+        || log.Contains("CENC", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<bool> TryRestartWithManifestFallbackAsync()
+    {
+        if (_manifestFallbackUsed
+            || Options.ManifestFallbackUrl is null
+            || Options.FileType.IsAudio
+            || string.Equals(Options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var log = CurrentProcessLog;
+        var extractionFailure = log.Contains("Unsupported URL", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("Unable to extract", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("No video formats", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("HTTP Error 401", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("HTTP Error 410", StringComparison.OrdinalIgnoreCase);
+        if (!extractionFailure)
+        {
+            return false;
+        }
+
+        Options.Url = Options.ManifestFallbackUrl;
+        Options.DownloadEngine = "n-m3u8dl-re";
+        Options.ResolverName = "n-m3u8dl-re";
+        Options.RenewalMode = "none";
+        _manifestFallbackUsed = true;
+        const string message = "yt-dlp could not extract this page; retrying the detected HLS/DASH stream with N_m3u8DL-RE...";
+        _logBuilder.AppendLine(message);
+        ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, message.AsMemory(), double.NaN, 0.0, 0));
+        DisposeProcess();
+        Status = DownloadStatus.Queued;
+        await Task.Delay(250);
+        Start();
+        return true;
+    }
+
     private async Task<bool> TryRestartAfterNetworkFailureAsync()
     {
         const int maxProcessRestarts = 2;
@@ -266,7 +344,7 @@ public partial class Download : IDisposable
             return false;
         }
 
-        var log = _logBuilder.ToString();
+        var log = CurrentProcessLog;
         var temporaryUrlFailure = log.Contains("HTTP Error 401", StringComparison.OrdinalIgnoreCase)
             || log.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase)
             || log.Contains("HTTP Error 410", StringComparison.OrdinalIgnoreCase)
@@ -283,7 +361,9 @@ public partial class Download : IDisposable
             return false;
         }
 
-        if (temporaryUrlFailure && Options.FallbackUrl is not null)
+        if (temporaryUrlFailure
+            && Options.FallbackUrl is not null
+            && !string.Equals(Options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase))
         {
             Options.Url = Options.FallbackUrl;
             Options.ResolverName = "yt-dlp-refresh";
@@ -318,6 +398,10 @@ public partial class Download : IDisposable
         _process.Dispose();
         _process = null;
     }
+
+    private string CurrentProcessLog => _currentProcessLogStart >= 0 && _currentProcessLogStart <= _logBuilder.Length
+        ? _logBuilder.ToString(_currentProcessLogStart, _logBuilder.Length - _currentProcessLogStart)
+        : _logBuilder.ToString();
 
     private async void Process_OutputDataReceived(object? sender, DataReceivedEventArgs e)
     {
@@ -404,6 +488,17 @@ public partial class Download : IDisposable
                     }
                     ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(Id, ReadOnlyMemory<char>.Empty, double.NaN, 0.0, 0));
                 }
+            }
+            else if (string.Equals(Options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase)
+                && Regex.Match(e.Data, @"(?<!\d)(?<percent>\d{1,3}(?:\.\d+)?)%") is { Success: true } match
+                && double.TryParse(match.Groups["percent"].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var percent))
+            {
+                ProgressChanged?.Invoke(this, new DownloadProgressChangedEventArgs(
+                    Id,
+                    e.Data.AsMemory(),
+                    Math.Clamp(percent / 100.0, 0.0, 1.0),
+                    0.0,
+                    -1));
             }
             else
             {

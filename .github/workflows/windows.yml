@@ -16,6 +16,8 @@ env:
   INSTALLER_NAME: NickvisionParabolicSetup
   SHORT_NAME: Parabolic
   YTDLP_VERSION: 2026.07.04
+  NM3U8DL_VERSION: v0.6.0-beta
+  NM3U8DL_BUILD_DATE: 20260629
 jobs:
   winui-windows:
     name: "WinUI on Windows"
@@ -30,6 +32,7 @@ jobs:
             ffmpeg: win64
             deno: x86_64
             ytdlp: ""
+            nm3u8dl: x64
           - arch: arm64
             runner: windows-11-arm
             subsys: clangarm64
@@ -37,6 +40,7 @@ jobs:
             ffmpeg: winarm64
             deno: aarch64
             ytdlp: _arm64
+            nm3u8dl: arm64
     runs-on: ${{ matrix.variant.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -90,14 +94,17 @@ jobs:
           Invoke-WebRequest https://github.com/Elypha/aria2-mod/releases/download/aria2c-1.37.0-b4fd7cb-20251126/aria2c-windows-x86_64-wintls.zip -OutFile aria2.zip
           Invoke-WebRequest https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-${{ matrix.variant.ffmpeg }}-gpl-8.1.zip -OutFile ffmpeg.zip
           Invoke-WebRequest https://github.com/denoland/deno/releases/download/v2.8.0/deno-${{ matrix.variant.deno }}-pc-windows-msvc.zip -OutFile deno.zip
+          Invoke-WebRequest https://github.com/nilaoda/N_m3u8DL-RE/releases/download/${{ env.NM3U8DL_VERSION }}/N_m3u8DL-RE_${{ env.NM3U8DL_VERSION }}_win-${{ matrix.variant.nm3u8dl }}_${{ env.NM3U8DL_BUILD_DATE }}.zip -OutFile nm3u8dl.zip
           Expand-Archive -Force 'aria2.zip'
           Expand-Archive -Force 'ffmpeg.zip'
           Expand-Archive -Force 'deno.zip'
+          Expand-Archive -Force 'nm3u8dl.zip' 'nm3u8dl'
           move aria2\aria2c.exe aria2c.exe
           move ffmpeg\ffmpeg-n8.1-latest-${{ matrix.variant.ffmpeg }}-gpl-8.1\bin\ffmpeg.exe ffmpeg.exe
           move ffmpeg\ffmpeg-n8.1-latest-${{ matrix.variant.ffmpeg }}-gpl-8.1\bin\ffprobe.exe ffprobe.exe
           move ffmpeg\ffmpeg-n8.1-latest-${{ matrix.variant.ffmpeg }}-gpl-8.1\bin\ffplay.exe ffplay.exe
           move deno\deno.exe deno.exe
+          Get-ChildItem -Path nm3u8dl -Recurse -Filter N_m3u8DL-RE.exe | Select-Object -First 1 | Move-Item -Destination N_m3u8DL-RE.exe
           iscc setup.iss
       - name: "Portable"
         shell: pwsh
@@ -119,6 +126,8 @@ jobs:
           move $innoDir\ffprobe.exe $portableDir\Release\ffprobe.exe
           move $innoDir\ffplay.exe $portableDir\Release\ffplay.exe
           move $innoDir\deno.exe $portableDir\Release\deno.exe
+          move $innoDir\N_m3u8DL-RE.exe $portableDir\Release\N_m3u8DL-RE.exe
+          Copy-Item "${{ github.workspace }}\resources\licenses\N_m3u8DL-RE-LICENSE.txt" "$portableDir\Release\N_m3u8DL-RE-LICENSE.txt"
       - uses: actions/upload-artifact@v4
         with:
           path: ${{ github.workspace }}/inno/${{ env.INSTALLER_NAME }}.exe

@@ -1,6 +1,6 @@
 # Parabolic Download Manager for Firefox
 
-Version `0.7.0` uses protocol v3 and the persistent Parabolic download service. It is intentionally Firefox-only. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path and Firefox may be closed after a task is accepted.
+Version `0.8.0` uses protocol v3 and the persistent Parabolic download service. It is intentionally Firefox-only. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path and Firefox may be closed after a task is accepted.
 
 ## Target user flow
 
@@ -22,7 +22,7 @@ flowchart TD
     C --> D["Native Messaging relay"]
     D --> E["Named pipe"]
     E --> F["Persistent Parabolic service"]
-    F --> G["Direct / yt-dlp / optional Cobalt resolver pipeline"]
+    F --> G["Permalink / yt-dlp / N_m3u8DL-RE / optional Cobalt"]
     G --> H["SQLite recovery + priority and scheduled queue"]
     H --> C
 ```
@@ -48,7 +48,7 @@ Detected URLs remain local until the user starts a download or explicitly reques
 
 ## Overlay behavior
 
-The content script scores visible `<video>` elements by viewport area and gives a priority bonus to a playing video. It displays one control for the primary video in each document or embedded frame. A closed Shadow DOM isolates the interface from site CSS and page scripts.
+The content script scores visible `<video>` elements by viewport area and gives a priority bonus to a playing video. It displays one control for the primary video in each document or embedded frame. A closed Shadow DOM isolates the interface from site CSS and page scripts. For Facebook and LinkedIn, the overlay also searches the active player's surrounding post for a Reel, video, post, or activity permalink instead of relying on a generic feed URL.
 
 The control follows scrolling, page mutations and responsive resizing. It can be placed in any player corner from the options page. Videos smaller than 240 by 120 CSS pixels are ignored to reduce buttons on thumbnails and advertisements.
 
@@ -62,7 +62,7 @@ The add-on requests the native application name:
 com.nickvision.parabolic
 ```
 
-The adapted desktop source contains a small `Nickvision.Parabolic.NativeHost` relay and `Nickvision.Parabolic.DownloadService`. The service routes detected MP4, HLS, and DASH URLs directly, uses yt-dlp for general discovery, and can use an explicitly configured self-hosted Cobalt instance as a fallback. It owns scheduled and active downloads after Firefox disconnects, renews unauthenticated Cobalt URLs at the actual scheduled start, falls back to stable page URLs after temporary CDN links expire, applies the selected retry/fragment strategy, enforces per-task bandwidth limits, relays progress, accepts pause/resume/cancel/priority commands, and can reveal a completed file in Explorer.
+The adapted desktop source contains a small `Nickvision.Parabolic.NativeHost` relay and `Nickvision.Parabolic.DownloadService`. The service asks yt-dlp to resolve the durable page permalink first. When page extraction fails and Firefox observed a recent HLS or DASH manifest, it retries that stream with the bundled `N_m3u8DL-RE` executable. Direct MP4 media remains supported, and an explicitly configured self-hosted Cobalt instance remains available for cases without a usable detected manifest. The service owns scheduled and active downloads after Firefox disconnects, renews unauthenticated Cobalt URLs at the actual scheduled start, falls back to stable page URLs after temporary CDN links expire, applies the selected retry/fragment strategy, enforces per-task bandwidth limits, relays progress, accepts pause/resume/cancel/priority commands, and can reveal a completed file in Explorer.
 
 The Windows installer publishes the host beside Parabolic, writes its absolute-path JSON manifest, and registers `com.nickvision.parabolic` for both 32-bit and 64-bit Firefox registry views. The host does not activate the WinUI window during the normal flow.
 
@@ -83,11 +83,11 @@ Firefox owns only the temporary relay connection. Accepted downloads continue in
 - Titles, format IDs and source-kind fields are length-limited before leaving the extension.
 - Page-controlled JavaScript cannot call Native Messaging directly; requests pass through the isolated content script and background validation.
 - The add-on never reads, copies, or transmits cookie values. When the user selects `Use Firefox session`, the local Parabolic process asks yt-dlp to read Firefox's cookie database directly.
-- HTTP referrer forwarding is disabled by default and can be enabled for CDNs that require it.
+- HTTP referrer forwarding is disabled for ordinary yt-dlp tasks by default. It is automatically limited to the selected media provider when a detected HLS/DASH manifest requires the page context.
 - Proxy use is inherited from Parabolic unless the user explicitly selects a direct connection.
 - A Cobalt token is stored only in Firefox local storage, is sent only to the configured Cobalt endpoint, and is never stored in Parabolic's recovery queue.
 - The official shared Cobalt API is not configured automatically; the user must provide an instance they operate or are authorized to use.
-- DRM decryption is outside the project scope.
+- DRM decryption is outside the project scope. The integration never supplies keys or invokes the key/decryption options exposed by N_m3u8DL-RE.
 
 ## Local development
 

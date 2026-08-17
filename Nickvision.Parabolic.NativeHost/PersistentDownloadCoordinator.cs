@@ -261,6 +261,10 @@ public sealed class PersistentDownloadCoordinator : IDisposable
                 : session.Status == "paused" ? "paused" : "downloading";
         lock (_sync)
         {
+            if (log.Contains("N_m3u8DL-RE", StringComparison.OrdinalIgnoreCase))
+            {
+                session.Resolver = "n-m3u8dl-re";
+            }
             session.Status = status;
             session.Progress = double.IsFinite(eventArgs.Progress) && eventArgs.Progress >= 0
                 ? Math.Clamp(eventArgs.Progress * 100.0, 0.0, 100.0)
@@ -380,7 +384,7 @@ public sealed class PersistentDownloadCoordinator : IDisposable
         public string? Speed { get; set; }
         public int? Eta { get; set; }
         public string? Message { get; set; }
-        public string Resolver { get; }
+        public string Resolver { get; set; }
         public DateTimeOffset? ScheduledAt { get; }
         public int? SpeedLimitKbps { get; }
 

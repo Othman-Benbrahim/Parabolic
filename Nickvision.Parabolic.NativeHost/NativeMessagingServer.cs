@@ -102,8 +102,8 @@ public sealed class NativeMessagingServer : IDisposable
                 case "hello":
                     await SendSuccessAsync(request.RequestId, new HelloResponse
                     {
-                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.3",
-                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
+                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.4",
+                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
                     }, NativeJsonContext.Default.HelloResponse, cancellationToken);
                     break;
                 case "get-formats":
@@ -318,6 +318,7 @@ public sealed class NativeMessagingServer : IDisposable
         DateTimeOffset? scheduledAt,
         CancellationToken cancellationToken)
     {
+        var hasManifest = TryGetManifestUrl(request, out var manifestUrl);
         if (request.ResolverPreference == "auto")
         {
             var direct = await _directResolver.ResolveAsync(request, cancellationToken);
@@ -328,6 +329,20 @@ public sealed class NativeMessagingServer : IDisposable
                     return BuildDirectDownloadOptions(request);
                 }
                 return BuildResolvedDownloadOptions(request, direct);
+            }
+
+            // Social pages are resolved from their durable permalink first. If
+            // yt-dlp cannot extract that page, Download will switch to this
+            // browser-observed HLS/DASH manifest with N_m3u8DL-RE.
+            if (hasManifest && TryGetStablePageUrl(request, out _))
+            {
+                var permalinkOptions = BuildDirectDownloadOptions(request);
+                AttachManifestFallback(permalinkOptions, request, manifestUrl, scheduledAt);
+                return permalinkOptions;
+            }
+            if (hasManifest)
+            {
+                return BuildManifestDownloadOptions(request, manifestUrl);
             }
         }
 
@@ -362,7 +377,12 @@ public sealed class NativeMessagingServer : IDisposable
             }
         }
 
-        return BuildDirectDownloadOptions(request);
+        var options = BuildDirectDownloadOptions(request);
+        if (request.ResolverPreference == "auto" && hasManifest)
+        {
+            AttachManifestFallback(options, request, manifestUrl, scheduledAt);
+        }
+        return options;
     }
 
     private DownloadOptions BuildDeferredCobaltOptions(MediaRequest request)
@@ -501,6 +521,39 @@ public sealed class NativeMessagingServer : IDisposable
         return options;
     }
 
+    private DownloadOptions BuildManifestDownloadOptions(MediaRequest request, Uri manifestUrl)
+    {
+        var options = BuildResolvedDownloadOptions(request, new ResolvedMedia(
+            manifestUrl,
+            request.Title,
+            "n-m3u8dl-re",
+            request.ManifestKind is "hls" or "dash" ? request.ManifestKind : "stream"));
+        options.DownloadEngine = "n-m3u8dl-re";
+        options.ManifestFallbackUrl = null;
+        return options;
+    }
+
+    private static void AttachManifestFallback(
+        DownloadOptions options,
+        MediaRequest request,
+        Uri manifestUrl,
+        DateTimeOffset? scheduledAt)
+    {
+        if (request.Preset == "audio")
+        {
+            return;
+        }
+        // A signed manifest may expire while a task is waiting. The durable
+        // page remains the primary source; the stream is still useful for
+        // immediate tasks and harmlessly fails over to the normal error path
+        // when it is no longer valid.
+        options.ManifestFallbackUrl = manifestUrl;
+        if (scheduledAt.HasValue && LooksTemporaryUrl(manifestUrl))
+        {
+            options.ManifestFallbackUrl = null;
+        }
+    }
+
     private DownloadOptions BuildResolvedDownloadOptions(MediaRequest request, ResolvedMedia resolved)
     {
         var rawTitle = string.IsNullOrWhiteSpace(resolved.Filename) ? request.Title : resolved.Filename;
@@ -594,7 +647,11 @@ public sealed class NativeMessagingServer : IDisposable
     {
         options.AuthenticationMode = request.AuthenticationMode;
         options.ProxyMode = request.ProxyMode;
-        if (request.SendPageReferer && TryGetStablePageUrl(request, out var referer))
+        options.HttpUserAgent = request.UserAgent;
+        if ((request.SendPageReferer
+                || options.ManifestFallbackUrl is not null
+                || string.Equals(options.DownloadEngine, "n-m3u8dl-re", StringComparison.OrdinalIgnoreCase))
+            && TryGetStablePageUrl(request, out var referer))
         {
             options.HttpReferer = referer.AbsoluteUri;
         }
@@ -627,6 +684,24 @@ public sealed class NativeMessagingServer : IDisposable
         if (DirectMediaResolver.TryCreateHttpUri(request.PageUrl, out uri)
             || DirectMediaResolver.TryCreateHttpUri(request.FrameUrl, out uri))
         {
+            return true;
+        }
+        uri = null!;
+        return false;
+    }
+
+    private static bool TryGetManifestUrl(MediaRequest request, out Uri uri)
+    {
+        if (request.ManifestKind is "hls" or "dash"
+            && DirectMediaResolver.TryCreateHttpUri(request.ManifestUrl, out uri))
+        {
+            return true;
+        }
+        if (DirectMediaResolver.TryCreateHttpUri(request.ManifestUrl, out var candidate)
+            && (candidate.AbsolutePath.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase)
+                || candidate.AbsolutePath.EndsWith(".mpd", StringComparison.OrdinalIgnoreCase)))
+        {
+            uri = candidate;
             return true;
         }
         uri = null!;

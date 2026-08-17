@@ -205,6 +205,125 @@ function isHttpUrl(value) {
   }
 }
 
+function normalizedSiteHost(hostname) {
+  const labels = String(hostname || "").toLowerCase().split(".").filter(Boolean);
+  return labels.length > 2 ? labels.slice(-2).join(".") : labels.join(".");
+}
+
+function isSameSite(left, right) {
+  try {
+    return normalizedSiteHost(new URL(left).hostname) === normalizedSiteHost(new URL(right).hostname);
+  } catch (_) {
+    return false;
+  }
+}
+
+function normalizeStablePageUrl(value, depth = 0) {
+  if (!isHttpUrl(value) || depth > 2) {
+    return "";
+  }
+  const url = new URL(value);
+  url.hash = "";
+
+  if (normalizedSiteHost(url.hostname) === "facebook.com") {
+    const redirected = url.searchParams.get("next");
+    if (url.pathname.startsWith("/login") && isHttpUrl(redirected)) {
+      return normalizeStablePageUrl(redirected, depth + 1);
+    }
+    url.searchParams.delete("_fb_noscript");
+    for (const parameter of ["__cft__", "__tn__", "mibextid", "ref", "refsrc", "rdid", "share_url"]) {
+      url.searchParams.delete(parameter);
+    }
+  } else if (normalizedSiteHost(url.hostname) === "linkedin.com") {
+    for (const parameter of ["trackingId", "trk", "lipi", "midToken", "midSig"]) {
+      url.searchParams.delete(parameter);
+    }
+  }
+  return url.href;
+}
+
+function permalinkScore(value) {
+  if (!isHttpUrl(value)) {
+    return -1000;
+  }
+  const url = new URL(value);
+  const site = normalizedSiteHost(url.hostname);
+  const path = url.pathname.toLowerCase();
+  let score = path === "/" ? 0 : 20;
+
+  if (site === "facebook.com") {
+    if (/^\/(?:reel|videos)\/\d+/.test(path)
+        || /\/videos\/\d+/.test(path)
+        || /\/posts\//.test(path)
+        || path === "/watch/" && url.searchParams.has("v")
+        || path === "/permalink.php" && url.searchParams.has("story_fbid")
+        || /^\/share\/(?:v|r)\//.test(path)) {
+      score += 200;
+    }
+    if (path === "/" || path.startsWith("/login") || path === "/watch/") {
+      score -= 100;
+    }
+  } else if (site === "linkedin.com") {
+    if (/^\/feed\/update\/urn:li:(?:activity|ugcpost):/i.test(url.pathname)
+        || /\/posts\//.test(path)
+        || /\/pulse\//.test(path)) {
+      score += 200;
+    }
+    if (path === "/" || path === "/feed/" || path.startsWith("/login")) {
+      score -= 100;
+    }
+  }
+  return score;
+}
+
+function choosePreferredPageUrl(source, senderTabUrl) {
+  const topUrl = normalizeStablePageUrl(senderTabUrl);
+  const candidates = [source.pageUrl, source.frameUrl, topUrl]
+    .map((value) => normalizeStablePageUrl(value))
+    .filter((value, index, values) => value && values.indexOf(value) === index);
+  if (candidates.length === 0) {
+    return "";
+  }
+
+  return candidates
+    .map((value, index) => {
+      let score = permalinkScore(value);
+      if (topUrl && value === topUrl) {
+        score += 10;
+      } else if (topUrl && !isSameSite(value, topUrl) && permalinkScore(value) < 100) {
+        score -= 150;
+      }
+      return { value, score, index };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index)[0].value;
+}
+
+function isManifestUrl(value, kind = "") {
+  if (!isHttpUrl(value)) {
+    return false;
+  }
+  const extension = getExtension(value);
+  return kind === "hls" || kind === "dash" || extension === "m3u8" || extension === "mpd";
+}
+
+function chooseRecentManifest(tabId, pageUrl, frameId) {
+  if (!Number.isInteger(tabId)) {
+    return null;
+  }
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  const candidates = [...(mediaByTab.get(tabId)?.values() || [])]
+    .filter((candidate) => candidate.discoveredAt >= cutoff && isManifestUrl(candidate.url, candidate.kind))
+    .map((candidate) => ({
+      candidate,
+      score: (candidate.source === "network" ? 20 : 0)
+        + (Number.isInteger(frameId) && candidate.frameId === frameId ? 50 : 0)
+        + (pageUrl && candidate.pageUrl && isSameSite(pageUrl, candidate.pageUrl) ? 30 : 0)
+        + candidate.discoveredAt / 1_000_000_000_000
+    }))
+    .sort((left, right) => right.score - left.score);
+  return candidates[0]?.candidate || null;
+}
+
 function getHeader(headers, name) {
   const expectedName = name.toLowerCase();
   const header = (headers || []).find((item) => item.name.toLowerCase() === expectedName);
@@ -424,9 +543,18 @@ async function openParabolicUrl(url, tabId) {
 
 function normalizedDownloadPayload(message, sender) {
   const source = message.request || {};
-  const pageUrl = isHttpUrl(sender.tab?.url) ? sender.tab.url : source.pageUrl;
-  const mediaUrl = isHttpUrl(source.mediaUrl) ? source.mediaUrl : "";
-  if (!isHttpUrl(pageUrl) && !mediaUrl) {
+  const tabId = sender.tab?.id ?? Number(message.tabId);
+  const pageUrl = choosePreferredPageUrl(source, sender.tab?.url);
+  const explicitManifest = isManifestUrl(source.manifestUrl, source.manifestKind)
+    ? { url: source.manifestUrl, kind: source.manifestKind }
+    : isManifestUrl(source.mediaUrl, source.sourceKind)
+      ? { url: source.mediaUrl, kind: source.sourceKind }
+      : null;
+  const detectedManifest = explicitManifest || chooseRecentManifest(tabId, pageUrl, sender.frameId);
+  const mediaUrl = isHttpUrl(source.mediaUrl) && !isManifestUrl(source.mediaUrl, source.sourceKind)
+    ? source.mediaUrl
+    : "";
+  if (!isHttpUrl(pageUrl) && !mediaUrl && !detectedManifest) {
     throw new Error("No downloadable page or media URL was provided.");
   }
 
@@ -465,9 +593,12 @@ function normalizedDownloadPayload(message, sender) {
     : "none";
   const speedLimitKbps = Number.parseInt(settings.speedLimitKbps, 10);
   return {
-    tabId: sender.tab?.id ?? Number(message.tabId),
+    tabId,
     pageUrl: processedPageUrl,
     mediaUrl,
+    manifestUrl: detectedManifest?.url || "",
+    manifestKind: detectedManifest?.kind || "",
+    userAgent: String(source.userAgent || globalThis.navigator?.userAgent || "").slice(0, 500),
     title: String(source.title || sender.tab?.title || "Media").slice(0, 500),
     preset,
     formatId: String(source.formatId || "").slice(0, 200),

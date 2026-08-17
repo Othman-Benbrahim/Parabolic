@@ -298,6 +298,11 @@ public class YtdlpExecutableService : DependencyExecutableService, IYtdlpExecuta
             arguments.Add("--referer");
             arguments.Add(referer.AbsoluteUri);
         }
+        if (!string.IsNullOrWhiteSpace(downloadOptions.HttpUserAgent))
+        {
+            arguments.Add("--user-agent");
+            arguments.Add(downloadOptions.HttpUserAgent);
+        }
         if (!string.Equals(downloadOptions.ProxyMode, "direct", StringComparison.OrdinalIgnoreCase)
             && !string.IsNullOrEmpty(_configurationService.ProxyUrl))
         {

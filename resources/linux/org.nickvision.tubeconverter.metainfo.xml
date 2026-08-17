@@ -60,6 +60,13 @@
     <display_length compare="ge">360</display_length>
   </requires>
   <releases>
+    <release version="2026.8.4" date="2026-08-18">
+      <description translate="no">
+        <p>- Added permalink-first resolution for Firefox media pages</p>
+        <p>- Added N_m3u8DL-RE fallback for detected non-DRM HLS and DASH streams</p>
+        <p>- Added automatic User-Agent and stream Referer forwarding for manifest downloads</p>
+      </description>
+    </release>
     <release version="2026.8.3" date="2026-08-18">
       <description translate="no">
         <p>- Added scheduled Cobalt URL renewal and stable-page fallback for expired CDN links</p>

@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 manifest = json.loads((ROOT / "extension/firefox/manifest.json").read_text(encoding="utf-8"))
 assert manifest["manifest_version"] == 3
-assert manifest["version"] == "0.7.0"
+assert manifest["version"] == "0.8.0"
 
 ET.parse(ROOT / "Nickvision.Parabolic.DownloadService/Nickvision.Parabolic.DownloadService.csproj")
 ET.parse(ROOT / "Nickvision.Parabolic.NativeHost/Nickvision.Parabolic.NativeHost.csproj")
@@ -21,7 +21,7 @@ workflow = (ROOT / ".github/workflows/windows.yml").read_text(encoding="utf-8")
 installer = (ROOT / "inno/setup.iss").read_text(encoding="utf-8-sig")
 
 assert "ProtocolVersion = 3" in server
-for capability in ("persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"):
+for capability in ("persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"):
     assert capability in server
 assert "OrderByDescending(download => download.Options.Priority)" in (
     ROOT / "Nickvision.Parabolic.Shared/Services/DownloadService.cs"
@@ -54,16 +54,26 @@ assert "DOWNLOAD_SERVICE_FILES_PATH" in workflow
 assert "Nickvision.Parabolic.DownloadService.exe" in installer
 
 download_options = (ROOT / "Nickvision.Parabolic.Shared/Models/DownloadOptions.cs").read_text(encoding="utf-8-sig")
-for field in ("AuthenticationMode", "ProxyMode", "HttpReferer", "ConcurrentFragments", "NetworkRetries", "SocketTimeoutSeconds", "FallbackUrl", "RenewalMode", "RenewalEndpoint", "RenewalSourceUrl"):
+for field in ("AuthenticationMode", "ProxyMode", "HttpReferer", "HttpUserAgent", "ConcurrentFragments", "NetworkRetries", "SocketTimeoutSeconds", "FallbackUrl", "ManifestFallbackUrl", "DownloadEngine", "RenewalMode", "RenewalEndpoint", "RenewalSourceUrl"):
     assert field in download_options
 renewal = (ROOT / "Nickvision.Parabolic.Shared/Services/UrlRenewalService.cs").read_text(encoding="utf-8-sig")
 assert "RenewAsync" in renewal
 assert "options.Url = renewed" in renewal
 ytdlp = (ROOT / "Nickvision.Parabolic.Shared/Services/YtdlpExecutableService.cs").read_text(encoding="utf-8-sig")
-for argument in ("--retries", "--fragment-retries", "--retry-sleep", "--socket-timeout", "--concurrent-fragments", "--referer", "--cookies-from-browser"):
+for argument in ("--retries", "--fragment-retries", "--retry-sleep", "--socket-timeout", "--concurrent-fragments", "--referer", "--user-agent", "--cookies-from-browser"):
     assert argument in ytdlp
 assert 'arguments.Add("firefox")' in ytdlp
 assert 'ProxyMode, "direct"' in ytdlp
+
+nm3u8dl = (ROOT / "Nickvision.Parabolic.Shared/Services/Nm3u8dlExecutableService.cs").read_text(encoding="utf-8-sig")
+for argument in ("--auto-select", "--download-retry-count", "--http-request-timeout", "--ffmpeg-binary-path", "--mux-after-done", "--header", "--disable-update-check"):
+    assert argument in nm3u8dl
+download_model = (ROOT / "Nickvision.Parabolic.Shared/Models/Download.cs").read_text(encoding="utf-8-sig")
+assert "TryRestartWithManifestFallbackAsync" in download_model
+assert "Parabolic does not request, store, or use decryption keys" in download_model
+assert "N_m3u8DL-RE.exe" in workflow
+assert "N_m3u8DL-RE.exe" in installer
+assert "N_m3u8DL-RE-LICENSE.txt" in installer
 
 chrome_files = list((ROOT / "extension/chrome").glob("**/*"))
 assert chrome_files, "Upstream Chrome sources should remain present but untouched by the Firefox package"

@@ -7,7 +7,7 @@
 - **Persistent Queue (Firefox)**: Accepted downloads continue after Firefox closes and recover from a dedicated SQLite queue after interruption.
 - **Priority Scheduling**: New browser downloads can use High, Normal or Low priority.
 - **Scheduled Downloads**: Queue a future start time that is persisted by the Windows service.
-- **Resolver Pipeline**: Direct MP4/HLS/DASH streams are preferred, yt-dlp remains the general resolver, and a self-hosted Cobalt endpoint can be configured as a fallback.
+- **Permalink-First Resolver Pipeline**: The real post/Reel/activity permalink is tried with yt-dlp first; a detected non-DRM HLS/DASH manifest is retried with bundled N_m3u8DL-RE, and a self-hosted Cobalt endpoint remains optional.
 - **Bandwidth Limit**: Apply a KiB/s limit to each new browser task.
 - **Temporary URL Renewal**: Resolve scheduled Cobalt links at start time and fall back to the stable page when a direct CDN link expires.
 - **Network/CDN Strategies**: Choose conservative, balanced, or aggressive fragment concurrency and retries.

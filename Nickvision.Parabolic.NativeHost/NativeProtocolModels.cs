@@ -47,6 +47,9 @@ internal sealed class MediaRequest
     public int TabId { get; set; } = -1;
     public string PageUrl { get; set; } = string.Empty;
     public string MediaUrl { get; set; } = string.Empty;
+    public string ManifestUrl { get; set; } = string.Empty;
+    public string ManifestKind { get; set; } = string.Empty;
+    public string UserAgent { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public string Preset { get; set; } = "best";
     public string FormatId { get; set; } = string.Empty;

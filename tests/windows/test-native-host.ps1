@@ -40,7 +40,7 @@ try {
         type = "hello"
         payload = @{
             extensionId = "parabolic-media-detector@othmanbenbrahim.dev"
-            extensionVersion = "0.7.0"
+            extensionVersion = "0.8.0"
             protocolVersion = 3
         }
     } | ConvertTo-Json -Compress -Depth 5
@@ -72,7 +72,7 @@ try {
     if ($response.requestId -ne "windows-smoke-test" -or -not $response.ok) {
         throw "Native host hello request failed: $($response | ConvertTo-Json -Compress -Depth 5)"
     }
-    $requiredCapabilities = @("formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling")
+    $requiredCapabilities = @("formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling")
     $missingCapabilities = @($requiredCapabilities | Where-Object {
         $response.payload.capabilities -notcontains $_
     })

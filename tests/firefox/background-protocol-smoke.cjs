@@ -64,7 +64,7 @@ const browser = {
       nativeHostName = name;
       return nativePort;
     },
-    getManifest() { return { version: "0.7.0" }; },
+    getManifest() { return { version: "0.8.0" }; },
     getURL(value) { return `moz-extension://test/${value}`; },
     onMessage: { addListener(listener) { runtimeMessageListeners.push(listener); } },
     onInstalled: { addListener() {} },
@@ -176,6 +176,7 @@ async function send(message, sender = {}) {
   assert.equal(request.payload.tabId, 42);
   assert.equal(request.payload.pageUrl, "https://example.com/watch/42");
   assert.equal(request.payload.mediaUrl, "");
+  assert.equal(request.payload.manifestUrl, "");
   assert.equal(request.payload.preset, "720");
   assert.equal(request.payload.formatId, "22");
   assert.equal(request.payload.priority, "normal");
@@ -189,6 +190,34 @@ async function send(message, sender = {}) {
   assert.equal(request.payload.authenticationMode, "firefox");
   assert.equal(request.payload.proxyMode, "direct");
   assert.equal(request.payload.sendPageReferer, true);
+
+  const facebookSender = {
+    tab: { id: 84, url: "https://www.facebook.com/?_fb_noscript=1", title: "Facebook video" },
+    frameId: 0
+  };
+  await send({
+    type: "media-detected",
+    candidates: [{
+      url: "https://video-cdn.example/playlist.m3u8?token=short-lived",
+      pageUrl: "https://www.facebook.com/reel/123456789",
+      kind: "hls",
+      source: "network"
+    }]
+  }, facebookSender);
+  const facebookDownload = await send({
+    type: "native-download",
+    request: {
+      pageUrl: "https://www.facebook.com/reel/123456789?ref=sharing",
+      frameUrl: "https://www.facebook.com/?_fb_noscript=1",
+      preset: "best",
+      sourceKind: "page"
+    }
+  }, facebookSender);
+  assert.equal(facebookDownload.ok, true);
+  const facebookRequest = nativeRequests.filter((item) => item.type === "download").at(-1);
+  assert.equal(facebookRequest.payload.pageUrl, "https://www.facebook.com/reel/123456789");
+  assert.equal(facebookRequest.payload.manifestUrl, "https://video-cdn.example/playlist.m3u8?token=short-lived");
+  assert.equal(facebookRequest.payload.manifestKind, "hls");
 
   const mediaCatalog = await send({ type: "get-media", tabId: 42 }, sender);
   assert.equal(Object.hasOwn(mediaCatalog.settings, "cobaltAuthToken"), false);

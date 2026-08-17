@@ -20,7 +20,7 @@
 </div>
 
 > [!NOTE]
-> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Version **2026.8.3** implements the Firefox-only final step of the download-manager roadmap with coordinated Firefox add-on **0.7.0**. Validate the Windows setup and unsigned add-on before publishing the final GitHub Release.
+> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Version **2026.8.4** adds permalink-first social-video resolution and a bundled N_m3u8DL-RE fallback to the Firefox-only download-manager roadmap, coordinated with Firefox add-on **0.8.0**. Validate the Windows setup and unsigned add-on before publishing the final GitHub Release.
 
 ## ✨ Features
 
@@ -32,7 +32,8 @@
 - Keep browser downloads running after Firefox closes with a per-user background service.
 - Recover interrupted browser downloads from a dedicated SQLite queue.
 - Schedule downloads for a future time and order queued work with High, Normal and Low priorities.
-- Route detected MP4, HLS, and DASH media directly, with yt-dlp and optional self-hosted Cobalt resolvers.
+- Prefer the real post/Reel/activity permalink, then retry browser-detected non-DRM HLS/DASH streams with bundled N_m3u8DL-RE when yt-dlp extraction fails.
+- Keep optional self-hosted Cobalt resolution for cases without a usable detected stream.
 - Apply an optional bandwidth limit to each new browser download.
 - Renew scheduled Cobalt URLs when the task starts and fall back to the stable page when a direct CDN URL expires.
 - Choose conservative, balanced, or aggressive fragment/retry behavior for unstable networks and CDNs.
@@ -54,7 +55,8 @@ On Windows, Firefox communicates with `com.nickvision.parabolic`, a lightweight 
 - pause, resume and reprioritize persistent downloads;
 - synchronize active downloads after Firefox reconnects;
 - schedule downloads and persist their start time across service restarts;
-- use direct MP4/HLS/DASH routing, yt-dlp, or an explicitly configured Cobalt fallback;
+- prefer a durable page permalink with yt-dlp, then use N_m3u8DL-RE for a recent non-DRM HLS/DASH manifest detected by Firefox;
+- use an explicitly configured Cobalt fallback when no usable detected stream is available;
 - apply a per-download bandwidth limit, including aria2 transfers;
 - renew temporary URLs at the actual scheduled start and retry transient CDN/network failures;
 - use Firefox cookies only when explicitly selected, without the add-on extracting or storing them;
@@ -74,7 +76,7 @@ Download versioned packages from this repository's [Releases](https://github.com
 1. Download the x64 or ARM64 setup executable for your computer.
 2. Close Firefox and Parabolic.
 3. Run the installer. It can be installed over an earlier adapted build.
-4. Install Firefox add-on `0.7.0`, then reload the video page.
+4. Install Firefox add-on `0.8.0`, then reload the video page.
 
 Use the installer rather than the portable archive when you want the Firefox bridge.
 
@@ -93,7 +95,7 @@ Temporary add-ons are removed when Firefox closes.
 Download the bundle matching your CPU, then run:
 
 ```bash
-flatpak install ./Parabolic-2026.8.3-Linux-x86_64.flatpak
+flatpak install ./Parabolic-2026.8.4-Linux-x86_64.flatpak
 flatpak run org.nickvision.tubeconverter
 ```
 

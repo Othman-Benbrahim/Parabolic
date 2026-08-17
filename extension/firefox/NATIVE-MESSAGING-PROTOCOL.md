@@ -1,6 +1,6 @@
 # Parabolic Firefox Native Messaging Protocol
 
-This document is the implementation contract between Firefox add-on `0.7.x` and Parabolic `2026.8.3`. Protocol version `3` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe.
+This document is the implementation contract between Firefox add-on `0.8.x` and Parabolic `2026.8.4`. Protocol version `3` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe.
 
 ## Host registration
 
@@ -74,7 +74,7 @@ Request payload:
 ```json
 {
   "extensionId": "parabolic-media-detector@othmanbenbrahim.dev",
-  "extensionVersion": "0.7.0",
+  "extensionVersion": "0.8.0",
   "protocolVersion": 3
 }
 ```
@@ -83,9 +83,9 @@ Response payload:
 
 ```json
 {
-  "appVersion": "2026.8.3",
+  "appVersion": "2026.8.4",
   "protocolVersion": 3,
-  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
+  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
 }
 ```
 
@@ -135,6 +135,9 @@ Request payload:
   "tabId": 12,
   "pageUrl": "https://example.com/watch/123",
   "mediaUrl": "",
+  "manifestUrl": "https://cdn.example.com/master.m3u8",
+  "manifestKind": "hls",
+  "userAgent": "Mozilla/5.0 ... Firefox/153.0",
   "title": "Example video",
   "preset": "best",
   "formatId": "",
@@ -188,6 +191,8 @@ The request uses the same payload as `get-formats`. Supported preset values are:
 | `audio` | Best audio-only result. |
 
 If `formatId` is non-empty, it takes precedence over the preset after the host validates it as a format returned for that URL.
+
+In automatic mode, `pageUrl` is the durable permalink selected by Firefox. The host tries that page with yt-dlp first. If extraction fails and `manifestUrl` is a recent HLS/DASH request observed for the active tab, the persistent service retries it with N_m3u8DL-RE. The fallback forwards the page as `Referer` and the Firefox User-Agent, but never receives cookie values or DRM keys.
 
 `resolverPreference` accepts `auto`, `yt-dlp`, or `cobalt`. Auto selects an HTTP media URL detected by Firefox first, then yt-dlp, and uses Cobalt only when an endpoint is configured and yt-dlp discovery returns no media. `speedLimitKbps` is `0` for unlimited or a value from 32 through 10,000,000. `scheduledAt` is empty or an ISO 8601 future date no more than one year away.
 

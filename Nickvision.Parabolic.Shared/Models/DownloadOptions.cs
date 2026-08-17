@@ -38,10 +38,13 @@ public class DownloadOptions
     public string AuthenticationMode { get; set; }
     public string ProxyMode { get; set; }
     public string HttpReferer { get; set; }
+    public string HttpUserAgent { get; set; }
     public int ConcurrentFragments { get; set; }
     public int NetworkRetries { get; set; }
     public int SocketTimeoutSeconds { get; set; }
     public Uri? FallbackUrl { get; set; }
+    public Uri? ManifestFallbackUrl { get; set; }
+    public string DownloadEngine { get; set; }
     public string RenewalMode { get; set; }
     public Uri? RenewalEndpoint { get; set; }
     public Uri? RenewalSourceUrl { get; set; }
@@ -79,10 +82,13 @@ public class DownloadOptions
         AuthenticationMode = "parabolic";
         ProxyMode = "parabolic";
         HttpReferer = string.Empty;
+        HttpUserAgent = string.Empty;
         ConcurrentFragments = 8;
         NetworkRetries = 10;
         SocketTimeoutSeconds = 20;
         FallbackUrl = null;
+        ManifestFallbackUrl = null;
+        DownloadEngine = "yt-dlp";
         RenewalMode = "none";
         RenewalEndpoint = null;
         RenewalSourceUrl = null;
