@@ -1,4 +1,5 @@
 using Nickvision.Desktop.Application;
+using Nickvision.Parabolic.Shared.Helpers;
 using Nickvision.Parabolic.Shared.Models;
 using System;
 using System.Collections.Generic;
