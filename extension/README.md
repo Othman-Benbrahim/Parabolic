@@ -6,6 +6,9 @@
 - **Native Background Downloads (Firefox)**: The adapted Windows build starts downloads and returns progress through Native Messaging without switching away from Firefox.
 - **Persistent Queue (Firefox)**: Accepted downloads continue after Firefox closes and recover from a dedicated SQLite queue after interruption.
 - **Priority Scheduling**: New browser downloads can use High, Normal or Low priority.
+- **Scheduled Downloads**: Queue a future start time that is persisted by the Windows service.
+- **Resolver Pipeline**: Direct MP4/HLS/DASH streams are preferred, yt-dlp remains the general resolver, and a self-hosted Cobalt endpoint can be configured as a fallback.
+- **Bandwidth Limit**: Apply a KiB/s limit to each new browser task.
 - **Context Menu Integration**: Right-click and select: `Open link in Parabolic` on any specific link to send that exact URL without needing to open the page. Otherwise, use the current tab's URL.
 - **Keyboard shortcut**: Press `Alt` + `P` to send the URL of your active tab to Parabolic.
 - **Lightweight & Fast**: Designed to be fast, unobtrusive, easy to use, and respects your privacy.

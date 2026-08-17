@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using System.Threading;
@@ -19,7 +20,7 @@ namespace Nickvision.Parabolic.NativeHost;
 
 public sealed class NativeMessagingServer : IDisposable
 {
-    public const int ProtocolVersion = 2;
+    public const int ProtocolVersion = 3;
 
     private static readonly string[] SupportedPresets = ["best", "1080", "720", "480", "audio"];
 
@@ -29,6 +30,8 @@ public sealed class NativeMessagingServer : IDisposable
     private readonly IDownloadService _downloadService;
     private readonly IYtdlpExecutableService _ytdlpExecutableService;
     private readonly PersistentDownloadCoordinator _downloadCoordinator;
+    private readonly IMediaResolver _directResolver;
+    private readonly IMediaResolver _cobaltResolver;
     private readonly ConcurrentDictionary<string, CachedDiscovery> _discoveryCache;
     private readonly SemaphoreSlim _dependencyUpdateLock;
     private CancellationToken _shutdownToken;
@@ -39,7 +42,8 @@ public sealed class NativeMessagingServer : IDisposable
         IDiscoveryService discoveryService,
         IDownloadService downloadService,
         IYtdlpExecutableService ytdlpExecutableService,
-        PersistentDownloadCoordinator downloadCoordinator)
+        PersistentDownloadCoordinator downloadCoordinator,
+        IHttpClientFactory httpClientFactory)
     {
         _transport = transport;
         _configurationService = configurationService;
@@ -47,6 +51,8 @@ public sealed class NativeMessagingServer : IDisposable
         _downloadService = downloadService;
         _ytdlpExecutableService = ytdlpExecutableService;
         _downloadCoordinator = downloadCoordinator;
+        _directResolver = new DirectMediaResolver();
+        _cobaltResolver = new CobaltMediaResolver(httpClientFactory.CreateClient());
         _discoveryCache = new ConcurrentDictionary<string, CachedDiscovery>(StringComparer.Ordinal);
         _dependencyUpdateLock = new SemaphoreSlim(1, 1);
         _shutdownToken = CancellationToken.None;
@@ -96,8 +102,8 @@ public sealed class NativeMessagingServer : IDisposable
                 case "hello":
                     await SendSuccessAsync(request.RequestId, new HelloResponse
                     {
-                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.1",
-                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads"]
+                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.2",
+                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling"]
                     }, NativeJsonContext.Default.HelloResponse, cancellationToken);
                     break;
                 case "get-formats":
@@ -258,6 +264,7 @@ public sealed class NativeMessagingServer : IDisposable
     {
         var mediaRequest = DeserializePayload(request, NativeJsonContext.Default.MediaRequest);
         ValidatePreset(mediaRequest.Preset);
+        ValidateResolverPreference(mediaRequest.ResolverPreference);
         var externalId = ($"download-{Guid.NewGuid():N}")[..21];
         DownloadOptions options;
         if (!string.IsNullOrWhiteSpace(mediaRequest.FormatId))
@@ -281,12 +288,18 @@ public sealed class NativeMessagingServer : IDisposable
         }
         else
         {
-            // Quick presets do not need a preliminary yt-dlp discovery. The download
-            // process performs its own extraction, so enqueue it immediately.
-            options = BuildDirectDownloadOptions(mediaRequest);
+            options = await ResolveQuickDownloadOptionsAsync(mediaRequest, cancellationToken);
         }
 
         options.Priority = ParsePriority(mediaRequest.Priority);
+        options.SpeedLimitKbps = ParseSpeedLimit(mediaRequest.SpeedLimitKbps);
+        options.ScheduledAt = ParseScheduledAt(mediaRequest.ScheduledAt);
+        if (options.ScheduledAt.HasValue && options.ResolverName == "cobalt")
+        {
+            throw new NativeRequestException(
+                "COBALT_SCHEDULING_UNSUPPORTED",
+                "Schedule this download with yt-dlp or direct media. Deferred Cobalt URL renewal arrives in step 3.");
+        }
         var snapshot = await _downloadCoordinator.EnqueueAsync(
             options,
             externalId,
@@ -296,8 +309,54 @@ public sealed class NativeMessagingServer : IDisposable
         {
             DownloadId = externalId,
             Status = snapshot.Status,
-            Priority = snapshot.Priority
+            Priority = snapshot.Priority,
+            Resolver = snapshot.Resolver,
+            ScheduledAt = snapshot.ScheduledAt,
+            SpeedLimitKbps = snapshot.SpeedLimitKbps
         }, NativeJsonContext.Default.DownloadResponse, cancellationToken);
+    }
+
+    private async Task<DownloadOptions> ResolveQuickDownloadOptionsAsync(
+        MediaRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.ResolverPreference == "auto")
+        {
+            var direct = await _directResolver.ResolveAsync(request, cancellationToken);
+            if (direct is not null)
+            {
+                return BuildResolvedDownloadOptions(request, direct);
+            }
+        }
+
+        if (request.ResolverPreference == "cobalt")
+        {
+            var cobalt = await _cobaltResolver.ResolveAsync(request, cancellationToken)
+                ?? throw new NativeRequestException(
+                    "COBALT_NOT_CONFIGURED",
+                    "Configure a self-hosted Cobalt API endpoint in the Firefox add-on settings.");
+            return BuildResolvedDownloadOptions(request, cobalt);
+        }
+
+        if (request.ResolverPreference == "auto" && !string.IsNullOrWhiteSpace(request.CobaltEndpoint))
+        {
+            try
+            {
+                var discovery = await ResolveDiscoveryAsync(request, cancellationToken);
+                return BuildDiscoveredPresetOptions(request, discovery);
+            }
+            catch (NativeRequestException discoveryError) when (discoveryError.Code == "NO_MEDIA")
+            {
+                var cobalt = await _cobaltResolver.ResolveAsync(request, cancellationToken);
+                if (cobalt is not null)
+                {
+                    return BuildResolvedDownloadOptions(request, cobalt);
+                }
+                throw;
+            }
+        }
+
+        return BuildDirectDownloadOptions(request);
     }
 
     private async Task HandleCancelAsync(NativeRequest request, CancellationToken cancellationToken)
@@ -401,10 +460,46 @@ public sealed class NativeMessagingServer : IDisposable
                 ? _configurationService.PreviousAudioOnlyFileType
                 : _configurationService.PreviousFullFileType,
             UseSleepPreset = false,
-            KeepPartialFiles = true
+            KeepPartialFiles = true,
+            ResolverName = "yt-dlp",
+            SourceKind = string.IsNullOrWhiteSpace(request.SourceKind) ? "page" : request.SourceKind
         };
         ApplyPreset(options, request.Preset, isAudio);
         return options;
+    }
+
+    private DownloadOptions BuildResolvedDownloadOptions(MediaRequest request, ResolvedMedia resolved)
+    {
+        var rawTitle = string.IsNullOrWhiteSpace(resolved.Filename) ? request.Title : resolved.Filename;
+        var title = Path.GetFileNameWithoutExtension(rawTitle)
+            .SanitizeForFilename(_configurationService.LimitCharacters)
+            .Trim();
+        var isAudio = request.Preset == "audio" || resolved.SourceKind == "audio";
+        var options = new DownloadOptions(resolved.Url)
+        {
+            SaveFilename = string.IsNullOrWhiteSpace(title) ? "Media" : title,
+            SaveFolder = _configurationService.PreviousSaveFolder,
+            FileType = isAudio
+                ? _configurationService.PreviousAudioOnlyFileType
+                : _configurationService.PreviousFullFileType,
+            UseSleepPreset = false,
+            KeepPartialFiles = true,
+            ResolverName = resolved.ResolverName,
+            SourceKind = resolved.SourceKind
+        };
+        ApplyPreset(options, request.Preset, isAudio);
+        return options;
+    }
+
+    private DownloadOptions BuildDiscoveredPresetOptions(MediaRequest request, CachedDiscovery discovery)
+    {
+        var media = discovery.Media;
+        var resolved = new ResolvedMedia(
+            media.Url.IsEmpty ? discovery.SourceUrl : media.Url,
+            media.Title,
+            "yt-dlp",
+            string.IsNullOrWhiteSpace(request.SourceKind) ? "page" : request.SourceKind);
+        return BuildResolvedDownloadOptions(request, resolved);
     }
 
     private DownloadOptions BuildDiscoveredDownloadOptions(
@@ -427,7 +522,9 @@ public sealed class NativeMessagingServer : IDisposable
             PlaylistPosition = media.PlaylistPosition,
             RequiresPlaylistItems = media.RequiresPlaylistItems,
             UseSleepPreset = false,
-            KeepPartialFiles = true
+            KeepPartialFiles = true,
+            ResolverName = "yt-dlp",
+            SourceKind = string.IsNullOrWhiteSpace(request.SourceKind) ? "page" : request.SourceKind
         };
 
         options.FormatSelector = selectedFormat.Selector;
@@ -578,6 +675,56 @@ public sealed class NativeMessagingServer : IDisposable
         {
             throw new NativeRequestException("INVALID_PRESET", "The requested Parabolic quality preset is not supported.");
         }
+    }
+
+    private static void ValidateResolverPreference(string resolverPreference)
+    {
+        if (resolverPreference is not ("auto" or "yt-dlp" or "cobalt"))
+        {
+            throw new NativeRequestException(
+                "INVALID_RESOLVER",
+                "Resolver preference must be auto, yt-dlp, or cobalt.");
+        }
+    }
+
+    private static int? ParseSpeedLimit(int speedLimitKbps)
+    {
+        if (speedLimitKbps == 0)
+        {
+            return null;
+        }
+        if (speedLimitKbps < 32 || speedLimitKbps > 10_000_000)
+        {
+            throw new NativeRequestException(
+                "INVALID_SPEED_LIMIT",
+                "Bandwidth limit must be 0 (unlimited) or between 32 and 10,000,000 KiB/s.");
+        }
+        return speedLimitKbps;
+    }
+
+    private static DateTimeOffset? ParseScheduledAt(string scheduledAt)
+    {
+        if (string.IsNullOrWhiteSpace(scheduledAt))
+        {
+            return null;
+        }
+        if (!DateTimeOffset.TryParse(
+            scheduledAt,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AllowWhiteSpaces | System.Globalization.DateTimeStyles.AssumeUniversal,
+            out var parsed))
+        {
+            throw new NativeRequestException(
+                "INVALID_SCHEDULE",
+                "Scheduled start must be an ISO 8601 date and time.");
+        }
+        if (parsed > DateTimeOffset.UtcNow.AddYears(1))
+        {
+            throw new NativeRequestException(
+                "INVALID_SCHEDULE",
+                "Scheduled start cannot be more than one year in the future.");
+        }
+        return parsed > DateTimeOffset.UtcNow ? parsed.ToUniversalTime() : null;
     }
 
     private static DownloadPriority ParsePriority(string priority) => priority.ToLowerInvariant() switch

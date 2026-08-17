@@ -18,8 +18,11 @@ public static class HostApplicationBuilderExtensions
         {
             var appInfo = new AppInfo("org.nickvision.tubeconverter", "Nickvision Parabolic", "Parabolic")
             {
-                Version = new AppVersion("2026.8.1"),
+                Version = new AppVersion("2026.8.2"),
                 Changelog = """
+                - Added modular direct, yt-dlp, and optional Cobalt media resolution
+                - Added direct MP4, HLS, and DASH routing from Firefox detections
+                - Added persistent scheduled downloads and per-download bandwidth limits
                 - Added a persistent Windows download service that survives Firefox shutdown
                 - Added high, normal, and low download queue priorities
                 - Added a separate SQLite recovery queue for browser downloads

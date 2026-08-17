@@ -270,10 +270,13 @@ public class YtdlpExecutableService : DependencyExecutableService, IYtdlpExecuta
             arguments.Add("--sponsorblock-remove");
             arguments.Add("default");
         }
-        if (_configurationService.SpeedLimit.HasValue)
+        var speedLimit = downloadOptions.SpeedLimitKbps.HasValue
+            ? downloadOptions.SpeedLimitKbps
+            : _configurationService.SpeedLimit;
+        if (speedLimit.HasValue && speedLimit.Value > 0)
         {
             arguments.Add("--limit-rate");
-            arguments.Add($"{_configurationService.SpeedLimit!.Value}K");
+            arguments.Add($"{speedLimit.Value}K");
         }
         if (!string.IsNullOrEmpty(_configurationService.ProxyUrl))
         {
@@ -353,7 +356,12 @@ public class YtdlpExecutableService : DependencyExecutableService, IYtdlpExecuta
             arguments.Add("--downloader");
             arguments.Add(Desktop.System.Environment.FindDependency("aria2c") ?? "aria2c");
             arguments.Add("--downloader-args");
-            arguments.Add($"aria2c:--summary-interval={(OperatingSystem.IsWindows() ? "0" : "1")} --enable-color=false -x {_configurationService.AriaMaxConnectionsPerServer} -k {_configurationService.AriaMinSplitSize}M");
+            var ariaArguments = $"aria2c:--summary-interval={(OperatingSystem.IsWindows() ? "0" : "1")} --enable-color=false -x {_configurationService.AriaMaxConnectionsPerServer} -k {_configurationService.AriaMinSplitSize}M";
+            if (speedLimit.HasValue && speedLimit.Value > 0)
+            {
+                ariaArguments += $" --max-overall-download-limit={speedLimit.Value}K";
+            }
+            arguments.Add(ariaArguments);
             arguments.Add("--concurrent-fragments");
             arguments.Add("8");
         }

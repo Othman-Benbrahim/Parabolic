@@ -253,7 +253,7 @@
     return best;
   }
 
-  function buildRequest(preset, formatId = "") {
+  function buildRequest(preset, formatId = "", scheduledAt = "") {
     const mediaUrl = normalizeMediaUrl(primaryMedia?.currentSrc || primaryMedia?.src);
     return {
       pageUrl: location.href,
@@ -265,6 +265,7 @@
         || "Media",
       preset,
       formatId,
+      scheduledAt,
       priority: settings.defaultPriority,
       sourceKind: mediaUrl ? "html5" : "page"
     };
@@ -374,7 +375,7 @@
     }
   }
 
-  async function startDownload(preset, formatId = "") {
+  async function startDownload(preset, formatId = "", scheduledAt = "") {
     if (!primaryMedia) {
       showToast("No active video was found.", "error");
       return;
@@ -388,7 +389,7 @@
     try {
       const response = await browser.runtime.sendMessage({
         type: "native-download",
-        request: buildRequest(preset, formatId)
+        request: buildRequest(preset, formatId, scheduledAt)
       });
       if (!response?.ok) {
         throw new Error(response?.error?.message || "Parabolic could not start the download.");
@@ -415,13 +416,17 @@
         }
       } else {
         currentDownloadActive = true;
-        armDownloadWatchdog(downloadId);
-        showToast(
-          response.result?.status === "queued" ? "Download queued…" : "Preparing download…",
-          "info",
-          true,
-          "cancel"
-        );
+        if (response.result?.status === "scheduled") {
+          showToast("Download scheduled.", "success", true, "cancel");
+        } else {
+          armDownloadWatchdog(downloadId);
+          showToast(
+            response.result?.status === "queued" ? "Download queued…" : "Preparing download…",
+            "info",
+            true,
+            "cancel"
+          );
+        }
       }
     } catch (error) {
       clearDownloadWatchdog();
@@ -435,6 +440,27 @@
     } finally {
       setBusy(false);
     }
+  }
+
+  function scheduleDownload() {
+    const initial = new Date(Date.now() + 60 * 60 * 1000);
+    initial.setSeconds(0, 0);
+    const localInitial = new Date(initial.getTime() - initial.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+    const value = window.prompt(
+      "Start date and time (YYYY-MM-DDTHH:MM)",
+      localInitial
+    );
+    if (value === null) {
+      return;
+    }
+    const scheduled = new Date(value);
+    if (!Number.isFinite(scheduled.getTime()) || scheduled.getTime() <= Date.now()) {
+      showToast("Choose a valid future date and time.", "error");
+      return;
+    }
+    startDownload(settings.quickDownloadPreset, "", scheduled.toISOString());
   }
 
   function presetButton(preset) {
@@ -618,6 +644,12 @@
     exactFormatsButton.textContent = "Load exact formats and sizes";
     exactFormatsButton.addEventListener("click", loadExactFormats);
     menu.append(exactFormatsButton);
+    const scheduleButton = document.createElement("button");
+    scheduleButton.type = "button";
+    scheduleButton.className = "link-button";
+    scheduleButton.textContent = "Schedule download…";
+    scheduleButton.addEventListener("click", scheduleDownload);
+    menu.append(scheduleButton);
     exactFormatsContainer = document.createElement("div");
     menu.append(exactFormatsContainer);
     const legacyButton = document.createElement("button");
@@ -762,6 +794,10 @@
       } else if (event.status === "queued") {
         currentDownloadActive = true;
         showToast("Download queued…", "info", true, "cancel");
+      } else if (event.status === "scheduled") {
+        currentDownloadActive = true;
+        const scheduled = event.scheduledAt ? new Date(event.scheduledAt).toLocaleString() : "later";
+        showToast(`Download scheduled for ${scheduled}.`, "success", true, "cancel");
       } else if (event.status === "downloading") {
         currentDownloadActive = true;
         if (Number.isFinite(event.progress) || event.message) {

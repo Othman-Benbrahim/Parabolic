@@ -53,6 +53,21 @@ internal sealed class MediaRequest
     public string SourceKind { get; set; } = string.Empty;
     public string FrameUrl { get; set; } = string.Empty;
     public string Priority { get; set; } = "normal";
+    public string ResolverPreference { get; set; } = "auto";
+    public string CobaltEndpoint { get; set; } = string.Empty;
+    public string CobaltAuthScheme { get; set; } = "none";
+    public string CobaltAuthToken { get; set; } = string.Empty;
+    public int SpeedLimitKbps { get; set; }
+    public string ScheduledAt { get; set; } = string.Empty;
+}
+
+internal sealed class CobaltRequest
+{
+    public string Url { get; set; } = string.Empty;
+    public string VideoQuality { get; set; } = "max";
+    public string DownloadMode { get; set; } = "auto";
+    public string FilenameStyle { get; set; } = "basic";
+    public string LocalProcessing { get; set; } = "disabled";
 }
 
 internal sealed class CancelRequest
@@ -96,6 +111,9 @@ internal sealed class DownloadResponse
     public string DownloadId { get; set; } = string.Empty;
     public string Status { get; set; } = "queued";
     public string Priority { get; set; } = "normal";
+    public string Resolver { get; set; } = "yt-dlp";
+    public string? ScheduledAt { get; set; }
+    public int? SpeedLimitKbps { get; set; }
 }
 
 public sealed class DownloadSnapshot
@@ -110,6 +128,9 @@ public sealed class DownloadSnapshot
     public string? Speed { get; set; }
     public int? Eta { get; set; }
     public string? Message { get; set; }
+    public string Resolver { get; set; } = "yt-dlp";
+    public string? ScheduledAt { get; set; }
+    public int? SpeedLimitKbps { get; set; }
 }
 
 internal sealed class DownloadsResponse
@@ -141,6 +162,9 @@ public sealed class DownloadEventPayload
     public string? Filename { get; set; }
     public string? Message { get; set; }
     public string Priority { get; set; } = "normal";
+    public string Resolver { get; set; } = "yt-dlp";
+    public string? ScheduledAt { get; set; }
+    public int? SpeedLimitKbps { get; set; }
 }
 
 [JsonSourceGenerationOptions(
@@ -151,6 +175,7 @@ public sealed class DownloadEventPayload
 [JsonSerializable(typeof(NativeEventEnvelope))]
 [JsonSerializable(typeof(HelloResponse))]
 [JsonSerializable(typeof(MediaRequest))]
+[JsonSerializable(typeof(CobaltRequest))]
 [JsonSerializable(typeof(CancelRequest))]
 [JsonSerializable(typeof(OpenFolderRequest))]
 [JsonSerializable(typeof(DownloadControlRequest))]

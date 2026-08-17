@@ -93,7 +93,10 @@ h2 {
   line-height: 1.45;
 }
 
-select {
+select,
+input[type="url"],
+input[type="password"],
+input[type="number"] {
   flex: 0 0 auto;
   min-width: 150px;
   padding: 7px 30px 7px 9px;
@@ -151,7 +154,8 @@ input:checked + .slider::before {
 }
 
 input:focus-visible + .slider,
-select:focus-visible {
+select:focus-visible,
+input:focus-visible {
   outline: 2px solid #e63a3f;
   outline-offset: 2px;
 }
@@ -166,7 +170,10 @@ select:focus-visible {
     display: grid;
   }
 
-  select {
+  select,
+  input[type="url"],
+  input[type="password"],
+  input[type="number"] {
     width: 100%;
   }
 }
@@ -191,7 +198,10 @@ select:focus-visible {
     border-top-color: #3c3d42;
   }
 
-  select {
+  select,
+  input[type="url"],
+  input[type="password"],
+  input[type="number"] {
     border-color: #505157;
     background: #222327;
   }

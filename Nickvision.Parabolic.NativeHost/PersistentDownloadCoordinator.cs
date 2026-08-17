@@ -74,7 +74,12 @@ public sealed class PersistentDownloadCoordinator : IDisposable
                     options.Url,
                     Path.Combine(options.SaveFolder, $"{options.SaveFilename}{options.FileType.DotExtension}"),
                     options.Priority,
-                    "queued");
+                    options.ScheduledAt.HasValue && options.ScheduledAt.Value > DateTimeOffset.UtcNow
+                        ? "scheduled"
+                        : "queued",
+                    options.ResolverName,
+                    options.ScheduledAt,
+                    options.SpeedLimitKbps);
                 _byInternalId[internalId] = session;
                 _byExternalId[externalId] = session;
                 return session.ToSnapshot();
@@ -219,7 +224,12 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             eventArgs.Url,
             eventArgs.Path,
             options.Priority,
-            eventArgs.Status == DownloadStatus.Queued ? "queued" : "downloading");
+            options.ScheduledAt.HasValue && options.ScheduledAt.Value > DateTimeOffset.UtcNow
+                ? "scheduled"
+                : eventArgs.Status == DownloadStatus.Queued ? "queued" : "downloading",
+            options.ResolverName,
+            options.ScheduledAt,
+            options.SpeedLimitKbps);
         lock (_sync)
         {
             _byInternalId[eventArgs.Id] = session;
@@ -320,7 +330,10 @@ public sealed class PersistentDownloadCoordinator : IDisposable
                 Eta = session.Eta,
                 Filename = string.IsNullOrWhiteSpace(session.Path) ? null : Path.GetFileName(session.Path),
                 Message = session.Message,
-                Priority = session.Priority.ToString().ToLowerInvariant()
+                Priority = session.Priority.ToString().ToLowerInvariant(),
+                Resolver = session.Resolver,
+                ScheduledAt = session.ScheduledAt?.ToString("O"),
+                SpeedLimitKbps = session.SpeedLimitKbps
             };
         }
         EventProduced?.Invoke(payload);
@@ -367,6 +380,9 @@ public sealed class PersistentDownloadCoordinator : IDisposable
         public string? Speed { get; set; }
         public int? Eta { get; set; }
         public string? Message { get; set; }
+        public string Resolver { get; }
+        public DateTimeOffset? ScheduledAt { get; }
+        public int? SpeedLimitKbps { get; }
 
         public PersistentDownloadSession(
             int internalId,
@@ -375,7 +391,10 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             Uri url,
             string path,
             DownloadPriority priority,
-            string status)
+            string status,
+            string resolver,
+            DateTimeOffset? scheduledAt,
+            int? speedLimitKbps)
         {
             InternalId = internalId;
             ExternalId = externalId;
@@ -384,6 +403,9 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             Path = path;
             Priority = priority;
             Status = status;
+            Resolver = string.IsNullOrWhiteSpace(resolver) ? "yt-dlp" : resolver;
+            ScheduledAt = scheduledAt;
+            SpeedLimitKbps = speedLimitKbps;
         }
 
         public DownloadSnapshot ToSnapshot() => new()
@@ -397,7 +419,10 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             Progress = Progress,
             Speed = Speed,
             Eta = Eta,
-            Message = Message
+            Message = Message,
+            Resolver = Resolver,
+            ScheduledAt = ScheduledAt?.ToString("O"),
+            SpeedLimitKbps = SpeedLimitKbps
         };
     }
 }

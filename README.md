@@ -20,7 +20,7 @@
 </div>
 
 > [!NOTE]
-> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Version **2026.8.1** introduces the first persistent download-manager milestone and coordinated Firefox add-on **0.5.0**.
+> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Version **2026.8.2** implements step 2 of the download-manager roadmap with coordinated Firefox add-on **0.6.0**. Keep this build as a validation milestone; publish the final GitHub Release after step 3 is accepted.
 
 ## ✨ Features
 
@@ -31,7 +31,9 @@
 - Update the stable yt-dlp downloader on demand when websites change their formats.
 - Keep browser downloads running after Firefox closes with a per-user background service.
 - Recover interrupted browser downloads from a dedicated SQLite queue.
-- Schedule queued work with High, Normal and Low priorities.
+- Schedule downloads for a future time and order queued work with High, Normal and Low priorities.
+- Route detected MP4, HLS, and DASH media directly, with yt-dlp and optional self-hosted Cobalt resolvers.
+- Apply an optional bandwidth limit to each new browser download.
 - Use native WinUI on Windows and the GNOME interface on Linux and macOS.
 - Build and package Windows x64/ARM64, Linux Flatpak x86_64/aarch64 and macOS x64/ARM64.
 
@@ -48,6 +50,9 @@ On Windows, Firefox communicates with `com.nickvision.parabolic`, a lightweight 
 - cancel a download or reveal its destination folder;
 - pause, resume and reprioritize persistent downloads;
 - synchronize active downloads after Firefox reconnects;
+- schedule downloads and persist their start time across service restarts;
+- use direct MP4/HLS/DASH routing, yt-dlp, or an explicitly configured Cobalt fallback;
+- apply a per-download bandwidth limit, including aria2 transfers;
 - detect and install the latest stable yt-dlp version on explicit request.
 
 The Windows installer is required for this integration because it installs the host manifest and Firefox registry entries. The portable Windows archive contains the host executable but does **not** register Native Messaging automatically.
@@ -63,7 +68,7 @@ Download versioned packages from this repository's [Releases](https://github.com
 1. Download the x64 or ARM64 setup executable for your computer.
 2. Close Firefox and Parabolic.
 3. Run the installer. It can be installed over an earlier adapted build.
-4. Install Firefox add-on `0.5.0`, then reload the video page.
+4. Install Firefox add-on `0.6.0`, then reload the video page.
 
 Use the installer rather than the portable archive when you want the Firefox bridge.
 
@@ -82,7 +87,7 @@ Temporary add-ons are removed when Firefox closes.
 Download the bundle matching your CPU, then run:
 
 ```bash
-flatpak install ./Parabolic-2026.8.1-Linux-x86_64.flatpak
+flatpak install ./Parabolic-2026.8.2-Linux-x86_64.flatpak
 flatpak run org.nickvision.tubeconverter
 ```
 

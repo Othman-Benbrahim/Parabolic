@@ -79,7 +79,9 @@ async function startDownload(request, button) {
     }
     setStatus(response.mode === "legacy"
       ? response.warning || "Opened in compatibility mode."
-      : "Download started in the background.");
+      : response.result?.status === "scheduled"
+        ? "Download scheduled."
+        : "Download started in the background.");
   } catch (error) {
     setStatus(error.message || "The Parabolic bridge is unavailable.", "error");
   } finally {

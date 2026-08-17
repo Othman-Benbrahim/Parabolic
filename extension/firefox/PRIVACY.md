@@ -11,6 +11,8 @@ The extension may process the following information in the browser:
 - the URL and title of the current page;
 - detected media URLs and basic media information, such as content type;
 - the download preset, quality, format, and priority selected by the user;
+- an optional scheduled start time and bandwidth limit;
+- the address and authentication choice for a Cobalt instance configured by the user;
 - the status and identifier of a download;
 - extension preferences stored locally in Firefox.
 
@@ -24,6 +26,8 @@ The extension also exchanges its extension version and Native Messaging protocol
 
 To analyze and download the requested media, Parabolic and its download components, including yt-dlp, connect to the website or media provider selected by the user. When the user requests a yt-dlp update check or update, Parabolic contacts the relevant official update source.
 
+If the user explicitly configures Cobalt, the requested page URL and selected quality are sent to that Cobalt instance to obtain a downloadable media URL. If authentication is configured, the token is sent only to that endpoint. Parabolic does not automatically use the official shared Cobalt API.
+
 ## Purpose and legal basis
 
 This information is processed only to provide the extension's requested functions: detecting media, retrieving available formats, starting and controlling downloads, reporting progress, and updating yt-dlp at the user's request. Page and media information is sent to Parabolic only as a direct consequence of a download-related action by the user.
@@ -32,11 +36,13 @@ This information is processed only to provide the extension's requested function
 
 The extension stores its settings locally using Firefox storage. It does not create a remote browsing history or upload extension settings to the developer.
 
+The optional Cobalt token is stored in Firefox local storage rather than synchronized storage. It is passed transiently to the local Parabolic host for the Cobalt request and is not written to Parabolic's SQLite recovery queue or logs.
+
 Parabolic stores the active browser queue and recovery information locally in SQLite so accepted downloads can continue after Firefox closes and resume after interruption. It may also store download history according to the application's settings. Downloaded and partial files remain on the user's computer until completed or removed. Users can clear download history through Parabolic and can remove extension preferences by uninstalling the extension or clearing its local data in Firefox.
 
 ## Sharing, sale, advertising, and analytics
 
-The extension does not sell personal data. It contains no advertising, analytics, behavioral tracking, telemetry service, or advertising identifiers. It does not transmit cookies, passwords, authentication tokens, or complete browsing history to the developer.
+The extension does not sell personal data. It contains no advertising, analytics, behavioral tracking, telemetry service, or advertising identifiers. It does not transmit cookies, passwords, authentication tokens, or complete browsing history to the developer. A Cobalt authentication token is transmitted only to the Cobalt instance expressly configured by the user.
 
 Data necessary to retrieve a requested media file is communicated only to the local Parabolic application and to the websites or media providers involved in fulfilling that request.
 
@@ -77,6 +83,8 @@ L'extension peut traiter les informations suivantes dans le navigateur :
 - l'adresse et le titre de la page courante ;
 - les adresses des médias détectés et certaines informations techniques, comme leur type de contenu ;
 - le préréglage, la qualité, le format et la priorité choisis par l'utilisateur ;
+- une éventuelle date de démarrage programmée et une limite de bande passante ;
+- l'adresse et le mode d'authentification d'une instance Cobalt configurée par l'utilisateur ;
 - l'état et l'identifiant d'un téléchargement ;
 - les préférences de l'extension enregistrées localement dans Firefox.
 
@@ -90,6 +98,8 @@ L'extension échange également sa version et la version du protocole Native Mes
 
 Pour analyser et télécharger le média demandé, Parabolic et ses composants de téléchargement, notamment yt-dlp, se connectent au site ou au fournisseur de médias choisi par l'utilisateur. Lorsque l'utilisateur demande une vérification ou une mise à jour de yt-dlp, Parabolic contacte la source officielle correspondante.
 
+Si l'utilisateur configure explicitement Cobalt, l'adresse de la page demandée et la qualité choisie sont transmises à cette instance Cobalt afin d'obtenir une adresse de média téléchargeable. Si une authentification est configurée, le jeton est envoyé uniquement à ce point d'accès. Parabolic n'utilise pas automatiquement l'API Cobalt partagée officielle.
+
 ## Finalité du traitement
 
 Ces informations sont utilisées uniquement pour fournir les fonctions demandées : détection des médias, récupération des formats disponibles, démarrage et contrôle des téléchargements, affichage de la progression et mise à jour de yt-dlp à la demande. Les informations relatives à une page ou à un média sont envoyées à Parabolic uniquement à la suite d'une action de téléchargement explicite de l'utilisateur.
@@ -98,11 +108,13 @@ Ces informations sont utilisées uniquement pour fournir les fonctions demandée
 
 L'extension enregistre ses paramètres localement au moyen du stockage de Firefox. Elle ne crée pas d'historique de navigation distant et ne transmet pas ses paramètres au développeur.
 
+Le jeton Cobalt facultatif est conservé dans le stockage local de Firefox, et non dans le stockage synchronisé. Il est transmis temporairement au pont Parabolic local pour la requête Cobalt et n'est écrit ni dans la file de reprise SQLite de Parabolic ni dans ses journaux.
+
 Parabolic conserve localement dans SQLite la file active du navigateur et les informations de reprise afin que les téléchargements acceptés continuent après la fermeture de Firefox et reprennent après une interruption. L'application peut également conserver un historique conformément à ses paramètres. Les fichiers téléchargés ou partiels restent sur l'ordinateur jusqu'à leur achèvement ou leur suppression. L'utilisateur peut effacer l'historique dans Parabolic et supprimer les préférences de l'extension en la désinstallant ou en effaçant ses données locales dans Firefox.
 
 ## Partage, vente, publicité et statistiques
 
-L'extension ne vend aucune donnée personnelle. Elle ne contient ni publicité, ni analyse d'audience, ni suivi comportemental, ni service de télémétrie, ni identifiant publicitaire. Elle ne transmet au développeur ni cookies, ni mots de passe, ni jetons d'authentification, ni historique de navigation complet.
+L'extension ne vend aucune donnée personnelle. Elle ne contient ni publicité, ni analyse d'audience, ni suivi comportemental, ni service de télémétrie, ni identifiant publicitaire. Elle ne transmet au développeur ni cookies, ni mots de passe, ni jetons d'authentification, ni historique de navigation complet. Un jeton d'authentification Cobalt est transmis uniquement à l'instance Cobalt expressément configurée par l'utilisateur.
 
 Les données nécessaires à la récupération d'un média demandé sont communiquées uniquement à l'application Parabolic locale et aux sites ou fournisseurs de médias nécessaires à l'exécution de la demande.
 

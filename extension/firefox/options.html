@@ -68,6 +68,54 @@
           <option value="low">Low</option>
         </select>
       </label>
+
+      <label class="setting" for="speedLimitKbps">
+        <span>
+          <strong>Bandwidth limit (KiB/s)</strong>
+          <small>Use 0 for unlimited. The limit is attached to each new download.</small>
+        </span>
+        <input type="number" id="speedLimitKbps" min="0" max="10000000" step="32" inputmode="numeric">
+      </label>
+    </section>
+
+    <section>
+      <h2>Resolvers</h2>
+      <label class="setting" for="resolverPreference">
+        <span>
+          <strong>Resolver strategy</strong>
+          <small>Auto uses direct media first, then yt-dlp, with Cobalt as an optional fallback.</small>
+        </span>
+        <select id="resolverPreference">
+          <option value="auto">Automatic</option>
+          <option value="yt-dlp">yt-dlp only</option>
+          <option value="cobalt">Cobalt</option>
+        </select>
+      </label>
+      <label class="setting" for="cobaltEndpoint">
+        <span>
+          <strong>Self-hosted Cobalt API</strong>
+          <small>Full HTTP(S) endpoint. Leave empty to disable Cobalt.</small>
+        </span>
+        <input type="url" id="cobaltEndpoint" placeholder="https://cobalt.example/api/">
+      </label>
+      <label class="setting" for="cobaltAuthScheme">
+        <span>
+          <strong>Cobalt authentication</strong>
+          <small>Match the authentication configured by the instance owner.</small>
+        </span>
+        <select id="cobaltAuthScheme">
+          <option value="none">None</option>
+          <option value="api-key">API key</option>
+          <option value="bearer">Bearer token</option>
+        </select>
+      </label>
+      <label class="setting" for="cobaltAuthToken">
+        <span>
+          <strong>Cobalt token</strong>
+          <small>Stored only in Firefox local storage and never persisted in Parabolic's recovery queue.</small>
+        </span>
+        <input type="password" id="cobaltAuthToken" autocomplete="off">
+      </label>
     </section>
 
     <section>

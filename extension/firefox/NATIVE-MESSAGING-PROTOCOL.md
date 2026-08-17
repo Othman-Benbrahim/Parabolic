@@ -1,6 +1,6 @@
 # Parabolic Firefox Native Messaging Protocol
 
-This document is the implementation contract between Firefox add-on `0.5.x` and Parabolic `2026.8.1`. Protocol version `2` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe.
+This document is the implementation contract between Firefox add-on `0.6.x` and Parabolic `2026.8.2`. Protocol version `3` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe.
 
 ## Host registration
 
@@ -27,7 +27,7 @@ parabolic-media-detector@othmanbenbrahim.dev
 
 ```json
 {
-  "protocolVersion": 2,
+  "protocolVersion": 3,
   "requestId": "9ca24fa5-0aac-4ab0-a5fc-a368a13f5a21",
   "type": "download",
   "payload": {}
@@ -40,7 +40,7 @@ Every request receives one response with the same `requestId`.
 
 ```json
 {
-  "protocolVersion": 2,
+  "protocolVersion": 3,
   "requestId": "9ca24fa5-0aac-4ab0-a5fc-a368a13f5a21",
   "type": "response",
   "ok": true,
@@ -52,7 +52,7 @@ Every request receives one response with the same `requestId`.
 
 ```json
 {
-  "protocolVersion": 2,
+  "protocolVersion": 3,
   "requestId": "9ca24fa5-0aac-4ab0-a5fc-a368a13f5a21",
   "type": "response",
   "ok": false,
@@ -74,8 +74,8 @@ Request payload:
 ```json
 {
   "extensionId": "parabolic-media-detector@othmanbenbrahim.dev",
-  "extensionVersion": "0.5.0",
-  "protocolVersion": 2
+  "extensionVersion": "0.6.0",
+  "protocolVersion": 3
 }
 ```
 
@@ -83,9 +83,9 @@ Response payload:
 
 ```json
 {
-  "appVersion": "2026.8.1",
-  "protocolVersion": 2,
-  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads"]
+  "appVersion": "2026.8.2",
+  "protocolVersion": 3,
+  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling"]
 }
 ```
 
@@ -140,7 +140,13 @@ Request payload:
   "formatId": "",
   "sourceKind": "page",
   "frameUrl": "https://example.com/watch/123",
-  "priority": "normal"
+  "priority": "normal",
+  "resolverPreference": "auto",
+  "cobaltEndpoint": "",
+  "cobaltAuthScheme": "none",
+  "cobaltAuthToken": "",
+  "speedLimitKbps": 0,
+  "scheduledAt": ""
 }
 ```
 
@@ -179,13 +185,18 @@ The request uses the same payload as `get-formats`. Supported preset values are:
 
 If `formatId` is non-empty, it takes precedence over the preset after the host validates it as a format returned for that URL.
 
+`resolverPreference` accepts `auto`, `yt-dlp`, or `cobalt`. Auto selects an HTTP media URL detected by Firefox first, then yt-dlp, and uses Cobalt only when an endpoint is configured and yt-dlp discovery returns no media. `speedLimitKbps` is `0` for unlimited or a value from 32 through 10,000,000. `scheduledAt` is empty or an ISO 8601 future date no more than one year away. Cobalt URLs are resolved immediately and therefore cannot be scheduled until URL renewal is implemented in step 3.
+
 Response payload:
 
 ```json
 {
   "downloadId": "download-a450d4",
   "status": "queued",
-  "priority": "normal"
+  "priority": "normal",
+  "resolver": "direct",
+  "scheduledAt": "2026-08-18T06:00:00.0000000+00:00",
+  "speedLimitKbps": 2048
 }
 ```
 
@@ -195,7 +206,7 @@ Events are not request responses and use `type: "event"`:
 
 ```json
 {
-  "protocolVersion": 2,
+  "protocolVersion": 3,
   "type": "event",
   "payload": {
     "downloadId": "download-a450d4",
@@ -205,12 +216,15 @@ Events are not request responses and use `type: "event"`:
     "speed": "8.4 MiB/s",
     "eta": 18,
     "filename": "Example video.mp4",
-    "priority": "normal"
+    "priority": "normal",
+    "resolver": "direct",
+    "scheduledAt": null,
+    "speedLimitKbps": 2048
   }
 }
 ```
 
-Status is one of `queued`, `analyzing`, `downloading`, `paused`, `merging`, `completed`, `failed`, or `cancelled`. Progress is a number from 0 through 100 when known.
+Status is one of `scheduled`, `queued`, `analyzing`, `downloading`, `paused`, `merging`, `completed`, `failed`, or `cancelled`. Progress is a number from 0 through 100 when known.
 
 ## Persistent queue controls
 

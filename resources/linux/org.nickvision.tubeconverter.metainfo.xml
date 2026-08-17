@@ -60,6 +60,14 @@
     <display_length compare="ge">360</display_length>
   </requires>
   <releases>
+    <release version="2026.8.2" date="2026-08-17">
+      <description translate="no">
+        <p>- Added modular direct, yt-dlp, and optional self-hosted Cobalt resolvers</p>
+        <p>- Added direct MP4, HLS, and DASH routing from Firefox media detection</p>
+        <p>- Added persistent scheduled downloads and per-download bandwidth limits</p>
+        <p>- Updated the Firefox add-on to protocol v3</p>
+      </description>
+    </release>
     <release version="2026.8.1" date="2026-08-17">
       <description translate="no">
         <p>- Added the first persistent download-manager architecture milestone on Windows</p>

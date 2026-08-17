@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Nickvision.Parabolic.Shared.Services;
@@ -24,6 +25,8 @@ public class DownloadService : IDisposable, IDownloadService
     private readonly Dictionary<int, Download> _downloading;
     private readonly Dictionary<int, Download> _queued;
     private readonly Dictionary<int, Download> _completed;
+    private readonly object _queueSync;
+    private readonly Timer _scheduleTimer;
 
     public event EventHandler<DownloadAddedEventArgs>? DownloadAdded;
     public event EventHandler<DownloadCompletedEventArgs>? DownloadCompleted;
@@ -47,6 +50,12 @@ public class DownloadService : IDisposable, IDownloadService
         _downloading = new Dictionary<int, Download>();
         _queued = new Dictionary<int, Download>();
         _completed = new Dictionary<int, Download>();
+        _queueSync = new object();
+        _scheduleTimer = new Timer(
+            _ => CheckScheduledDownloads(),
+            null,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(1));
     }
 
     ~DownloadService()
@@ -85,18 +94,28 @@ public class DownloadService : IDisposable, IDownloadService
                 Path = download.FilePath
             });
         }
-        if (_downloading.Count < _configurationService.MaxNumberOfActiveDownloads)
+        var startImmediately = false;
+        lock (_queueSync)
         {
-            _logger.LogDebug($"Starting download ({download.Id}).");
-            _downloading.Add(download.Id, download);
-            DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download));
-            download.Start();
+            startImmediately = IsDue(download)
+                && _downloading.Count < _configurationService.MaxNumberOfActiveDownloads;
+            if (startImmediately)
+            {
+                _logger.LogDebug($"Starting download ({download.Id}).");
+                _downloading.Add(download.Id, download);
+            }
+            else
+            {
+                _logger.LogDebug(IsDue(download)
+                    ? $"Queueing download ({download.Id})..."
+                    : $"Scheduling download ({download.Id}) for {download.Options.ScheduledAt:O}...");
+                _queued.Add(download.Id, download);
+            }
         }
-        else
+        DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download));
+        if (startImmediately)
         {
-            _logger.LogDebug($"Queueing download ({download.Id})...");
-            _queued.Add(download.Id, download);
-            DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download));
+            download.Start();
         }
         return download.Id;
     }
@@ -123,19 +142,24 @@ public class DownloadService : IDisposable, IDownloadService
                     Path = download.FilePath
                 });
             }
-            if (_downloading.Count < _configurationService.MaxNumberOfActiveDownloads)
+            lock (_queueSync)
             {
-                _logger.LogDebug($"Starting download ({download.Id}).");
-                _downloading.Add(download.Id, download);
-                DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download));
-                downloadsToStart.Add(download);
+                if (IsDue(download)
+                    && _downloading.Count < _configurationService.MaxNumberOfActiveDownloads)
+                {
+                    _logger.LogDebug($"Starting download ({download.Id}).");
+                    _downloading.Add(download.Id, download);
+                    downloadsToStart.Add(download);
+                }
+                else
+                {
+                    _logger.LogDebug(IsDue(download)
+                        ? $"Queueing download ({download.Id})..."
+                        : $"Scheduling download ({download.Id}) for {download.Options.ScheduledAt:O}...");
+                    _queued.Add(download.Id, download);
+                }
             }
-            else
-            {
-                _logger.LogDebug($"Queueing download ({download.Id})...");
-                _queued.Add(download.Id, download);
-                DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download));
-            }
+            DownloadAdded?.Invoke(this, new DownloadAddedEventArgs(download));
         }
         await _recoveryService.AddAsync(recoverableDownloads);
         await _historyService.AddAsync(historicDownloads);
@@ -156,6 +180,7 @@ public class DownloadService : IDisposable, IDownloadService
             pair.Value.ProgressChanged -= Download_ProgressChanged;
             pair.Value.Dispose();
         }
+        _scheduleTimer.Dispose();
         _completed.Clear();
         _logger.LogDebug($"Cleared {ids.Count} completed download(s).");
         return ids;
@@ -281,8 +306,13 @@ public class DownloadService : IDisposable, IDownloadService
     {
         _logger.LogDebug($"Stopping download ({id})...");
         Download? download = null;
-        if (_downloading.TryGetValue(id, out download) || _queued.TryGetValue(id, out download))
+        lock (_queueSync)
         {
+            if (!_downloading.TryGetValue(id, out download) && !_queued.TryGetValue(id, out download))
+            {
+                _logger.LogWarning($"Unable to stop download ({id}), not found.");
+                return false;
+            }
             download.Stop();
             download.Completed -= Download_Completed;
             download.ProgressChanged -= Download_ProgressChanged;
@@ -290,12 +320,14 @@ public class DownloadService : IDisposable, IDownloadService
             _downloading.Remove(id);
             _queued.Remove(id);
             _completed.Add(id, download);
+        }
+        if (download is not null)
+        {
             await _recoveryService.RemoveAsync(id);
             _logger.LogDebug($"Stopped download ({id}).");
             DownloadStopped?.Invoke(this, new DownloadEventArgs(id));
             return true;
         }
-        _logger.LogWarning($"Unable to stop download ({id}), not found.");
         return false;
     }
 
@@ -343,6 +375,7 @@ public class DownloadService : IDisposable, IDownloadService
         {
             return;
         }
+        _scheduleTimer.Dispose();
         foreach (var pair in _downloading)
         {
             pair.Value.Completed -= Download_Completed;
@@ -365,12 +398,16 @@ public class DownloadService : IDisposable, IDownloadService
 
     private async void Download_Completed(object? sender, DownloadCompletedEventArgs e)
     {
-        if (!_downloading.TryGetValue(e.Id, out var download) || download.Status == DownloadStatus.Stopped)
+        Download? download;
+        lock (_queueSync)
         {
-            return;
+            if (!_downloading.TryGetValue(e.Id, out download) || download.Status == DownloadStatus.Stopped)
+            {
+                return;
+            }
+            _completed.Add(e.Id, download);
+            _downloading.Remove(e.Id);
         }
-        _completed.Add(e.Id, download);
-        _downloading.Remove(e.Id);
         await _recoveryService.RemoveAsync(e.Id);
         if (e.Status == DownloadStatus.Error)
         {
@@ -385,14 +422,42 @@ public class DownloadService : IDisposable, IDownloadService
             _logger.LogDebug($"Download stopped ({e.Id}): {download.Log}");
         }
         DownloadCompleted?.Invoke(this, e);
-        if (_queued.Count > 0 && _downloading.Count < _configurationService.MaxNumberOfActiveDownloads)
+        StartDownloadsFromQueue();
+    }
+
+    private static bool IsDue(Download download) =>
+        !download.Options.ScheduledAt.HasValue
+        || download.Options.ScheduledAt.Value <= DateTimeOffset.UtcNow;
+
+    private void CheckScheduledDownloads()
+    {
+        try
         {
-            var firstDownload = _queued.Values
-                .OrderByDescending(download => download.Options.Priority)
-                .ThenBy(download => download.Id)
-                .FirstOrDefault();
-            if (firstDownload is not null)
+            StartDownloadsFromQueue();
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Unable to start scheduled downloads from the queue.");
+        }
+    }
+
+    private void StartDownloadsFromQueue()
+    {
+        lock (_queueSync)
+        {
+            while (_queued.Count > 0
+                && _downloading.Count < _configurationService.MaxNumberOfActiveDownloads)
             {
+                var firstDownload = _queued.Values
+                    .Where(IsDue)
+                    .OrderByDescending(download => download.Options.Priority)
+                    .ThenBy(download => download.Options.ScheduledAt ?? DateTimeOffset.MinValue)
+                    .ThenBy(download => download.Id)
+                    .FirstOrDefault();
+                if (firstDownload is null)
+                {
+                    break;
+                }
                 _downloading.Add(firstDownload.Id, firstDownload);
                 _queued.Remove(firstDownload.Id);
                 _logger.LogDebug($"Starting download from queue ({firstDownload.Id}).");

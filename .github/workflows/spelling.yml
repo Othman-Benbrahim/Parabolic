@@ -17,4 +17,6 @@ jobs:
         with:
           check_filenames: true
           skip: cargo-sources.json,.git,*.svg,*.html,*.js,*.po,*.pot,*.page,*.map,*.rtf,pch.h,CONTRIBUTING.md,StringExtensions.cs,*/PRIVACY.md
+          # Valid French words from the bilingual Firefox privacy notice and
+          # the .NET PipeDirection.InOut API identifier.
           ignore_words_list: gir,adresses,fonction,informations,pont,inout

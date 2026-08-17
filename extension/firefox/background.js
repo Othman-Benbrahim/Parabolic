@@ -6,12 +6,16 @@ const DEFAULT_SETTINGS = {
   showOverlay: true,
   quickDownloadPreset: "best",
   defaultPriority: "normal",
+  resolverPreference: "auto",
+  cobaltEndpoint: "",
+  cobaltAuthScheme: "none",
+  speedLimitKbps: 0,
   overlayPosition: "top-right",
   fallbackToProtocol: false
 };
 
 const NATIVE_HOST_NAME = "com.nickvision.parabolic";
-const NATIVE_PROTOCOL_VERSION = 2;
+const NATIVE_PROTOCOL_VERSION = 3;
 const NATIVE_REQUEST_TIMEOUT = 8000;
 const MAX_MEDIA_PER_TAB = 60;
 const MEDIA_EXTENSIONS = new Set([
@@ -27,6 +31,7 @@ const HLS_MIME_TYPES = new Set([
 ]);
 const DOWNLOAD_PRESETS = new Set(["best", "1080", "720", "480", "audio"]);
 const DOWNLOAD_PRIORITIES = new Set(["high", "normal", "low"]);
+const RESOLVER_PREFERENCES = new Set(["auto", "yt-dlp", "cobalt"]);
 
 const mediaByTab = new Map();
 const downloadTabs = new Map();
@@ -445,6 +450,10 @@ function normalizedDownloadPayload(message, sender) {
   const priority = DOWNLOAD_PRIORITIES.has(source.priority)
     ? source.priority
     : fallbackPriority;
+  const resolverPreference = RESOLVER_PREFERENCES.has(settings.resolverPreference)
+    ? settings.resolverPreference
+    : "auto";
+  const speedLimitKbps = Number.parseInt(settings.speedLimitKbps, 10);
   return {
     tabId: sender.tab?.id ?? Number(message.tabId),
     pageUrl: processedPageUrl,
@@ -454,7 +463,17 @@ function normalizedDownloadPayload(message, sender) {
     formatId: String(source.formatId || "").slice(0, 200),
     sourceKind: String(source.sourceKind || "page").slice(0, 40),
     frameUrl: processedFrameUrl,
-    priority
+    priority,
+    resolverPreference,
+    cobaltEndpoint: isHttpUrl(settings.cobaltEndpoint) ? settings.cobaltEndpoint : "",
+    cobaltAuthScheme: ["none", "api-key", "bearer"].includes(settings.cobaltAuthScheme)
+      ? settings.cobaltAuthScheme
+      : "none",
+    cobaltAuthToken: String(settings.cobaltAuthToken || ""),
+    speedLimitKbps: Number.isFinite(speedLimitKbps) && speedLimitKbps >= 32
+      ? Math.min(speedLimitKbps, 10000000)
+      : 0,
+    scheduledAt: String(source.scheduledAt || "").slice(0, 80)
   };
 }
 
@@ -576,7 +595,19 @@ async function createContextMenu() {
 }
 
 async function loadSettings() {
-  settings = { ...DEFAULT_SETTINGS, ...(await browser.storage.sync.get(DEFAULT_SETTINGS)) };
+  const synced = await browser.storage.sync.get(DEFAULT_SETTINGS);
+  const local = await browser.storage.local.get({ cobaltAuthToken: "" });
+  settings = { ...DEFAULT_SETTINGS, ...synced, cobaltAuthToken: local.cobaltAuthToken || "" };
+}
+
+function contentSettings() {
+  return {
+    detectMedia: settings.detectMedia,
+    showOverlay: settings.showOverlay,
+    quickDownloadPreset: settings.quickDownloadPreset,
+    defaultPriority: settings.defaultPriority,
+    overlayPosition: settings.overlayPosition
+  };
 }
 
 async function initializeBackground() {
@@ -608,7 +639,9 @@ browser.runtime.onStartup.addListener(initializeBackground);
 initializeBackground().catch(console.error);
 
 browser.storage.onChanged.addListener(async (changes, namespace) => {
-  if (namespace !== "sync") {
+  if (namespace === "local" && changes.cobaltAuthToken) {
+    settings.cobaltAuthToken = changes.cobaltAuthToken.newValue || "";
+  } else if (namespace !== "sync") {
     return;
   }
   for (const key of Object.keys(DEFAULT_SETTINGS)) {
@@ -628,7 +661,7 @@ browser.storage.onChanged.addListener(async (changes, namespace) => {
   const tabs = await browser.tabs.query({});
   await Promise.all(tabs.map((tab) => browser.tabs.sendMessage(tab.id, {
     type: "parabolic-settings-updated",
-    settings
+    settings: contentSettings()
   }).catch(() => undefined)));
 });
 
@@ -668,11 +701,11 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     const tabId = Number(message.tabId ?? sender.tab?.id);
     const candidates = [...(mediaByTab.get(tabId)?.values() || [])]
       .sort((left, right) => right.discoveredAt - left.discoveredAt);
-    return { candidates, settings };
+    return { candidates, settings: contentSettings() };
   }
 
   if (message.type === "get-settings") {
-    return { ok: true, settings };
+    return { ok: true, settings: contentSettings() };
   }
 
   if (message.type === "clear-media") {

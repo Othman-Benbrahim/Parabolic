@@ -6,6 +6,10 @@ const DEFAULT_SETTINGS = {
   showOverlay: true,
   quickDownloadPreset: "best",
   defaultPriority: "normal",
+  resolverPreference: "auto",
+  cobaltEndpoint: "",
+  cobaltAuthScheme: "none",
+  speedLimitKbps: 0,
   overlayPosition: "top-right",
   fallbackToProtocol: false
 };
@@ -23,14 +27,22 @@ function showSaved() {
 
 async function saveSetting(event) {
   const element = event.currentTarget;
-  const value = element.type === "checkbox" ? element.checked : element.value;
-  await browser.storage.sync.set({ [element.id]: value });
+  let value = element.type === "checkbox" ? element.checked : element.value;
+  if (element.type === "number") {
+    value = Number.parseInt(element.value, 10) || 0;
+  }
+  if (element.id === "cobaltAuthToken") {
+    await browser.storage.local.set({ cobaltAuthToken: value });
+  } else {
+    await browser.storage.sync.set({ [element.id]: value });
+  }
   showSaved();
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     const settings = await browser.storage.sync.get(DEFAULT_SETTINGS);
+    const localSettings = await browser.storage.local.get({ cobaltAuthToken: "" });
     for (const [key, fallback] of Object.entries(DEFAULT_SETTINGS)) {
       const element = document.getElementById(key);
       if (!element) {
@@ -43,6 +55,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       element.addEventListener("change", saveSetting);
     }
+    const token = document.getElementById("cobaltAuthToken");
+    token.value = localSettings.cobaltAuthToken || "";
+    token.addEventListener("change", saveSetting);
   } catch (error) {
     const savedState = document.getElementById("savedState");
     savedState.textContent = "Unable to load settings";

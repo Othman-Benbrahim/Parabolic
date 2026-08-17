@@ -35,13 +35,13 @@ if (-not $process.Start()) {
 
 try {
     $request = @{
-        protocolVersion = 2
+        protocolVersion = 3
         requestId = "windows-smoke-test"
         type = "hello"
         payload = @{
             extensionId = "parabolic-media-detector@othmanbenbrahim.dev"
-            extensionVersion = "0.5.0"
-            protocolVersion = 2
+            extensionVersion = "0.6.0"
+            protocolVersion = 3
         }
     } | ConvertTo-Json -Compress -Depth 5
     $payload = [System.Text.Encoding]::UTF8.GetBytes($request)
@@ -72,11 +72,11 @@ try {
     if ($response.requestId -ne "windows-smoke-test" -or -not $response.ok) {
         throw "Native host hello request failed: $($response | ConvertTo-Json -Compress -Depth 5)"
     }
-    $requiredCapabilities = @("formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads")
+    $requiredCapabilities = @("formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "hls-dash", "bandwidth-limit", "scheduling")
     $missingCapabilities = @($requiredCapabilities | Where-Object {
         $response.payload.capabilities -notcontains $_
     })
-    if ($response.payload.protocolVersion -ne 2 -or $missingCapabilities.Count -gt 0) {
+    if ($response.payload.protocolVersion -ne 3 -or $missingCapabilities.Count -gt 0) {
         throw "Native host returned incompatible capabilities."
     }
     Write-Host "Native Messaging host smoke test passed ($($response.payload.appVersion))."

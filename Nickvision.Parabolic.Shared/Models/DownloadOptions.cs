@@ -31,6 +31,10 @@ public class DownloadOptions
     public DownloadPriority Priority { get; set; }
     public string ClientRequestId { get; set; }
     public int ClientTabId { get; set; }
+    public string ResolverName { get; set; }
+    public string SourceKind { get; set; }
+    public int? SpeedLimitKbps { get; set; }
+    public DateTimeOffset? ScheduledAt { get; set; }
 
     public DownloadOptions(Uri url)
     {
@@ -57,6 +61,10 @@ public class DownloadOptions
         Priority = DownloadPriority.Normal;
         ClientRequestId = string.Empty;
         ClientTabId = -1;
+        ResolverName = "yt-dlp";
+        SourceKind = "page";
+        SpeedLimitKbps = null;
+        ScheduledAt = null;
     }
 
     public string SaveFolder

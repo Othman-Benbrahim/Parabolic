@@ -1,6 +1,6 @@
 # Parabolic Download Manager for Firefox
 
-Version `0.5.0` uses protocol v2 and the persistent Parabolic download service. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path and Firefox may be closed after a task is accepted.
+Version `0.6.0` uses protocol v3 and the persistent Parabolic download service. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path and Firefox may be closed after a task is accepted.
 
 ## Target user flow
 
@@ -22,11 +22,12 @@ flowchart TD
     C --> D["Native Messaging relay"]
     D --> E["Named pipe"]
     E --> F["Persistent Parabolic service"]
-    F --> G["SQLite recovery + priority queue"]
-    G --> C
+    F --> G["Direct / yt-dlp / optional Cobalt resolver pipeline"]
+    G --> H["SQLite recovery + priority and scheduled queue"]
+    H --> C
 ```
 
-No detected URL or browsing data is sent to a remote service by the add-on. URLs leave Firefox only when the user starts a download or explicitly requests the format list.
+Detected URLs remain local until the user starts a download or explicitly requests the format list. Direct and yt-dlp tasks contact only the selected media providers. If the user configures Cobalt, the requested page URL is also sent to that configured Cobalt instance for resolution.
 
 ## Files
 
@@ -61,7 +62,7 @@ The add-on requests the native application name:
 com.nickvision.parabolic
 ```
 
-The adapted desktop source contains a small `Nickvision.Parabolic.NativeHost` relay and `Nickvision.Parabolic.DownloadService`. The service performs discovery with yt-dlp, returns a concise format list, owns downloads after Firefox disconnects, relays progress, accepts pause/resume/cancel/priority commands, and can reveal a completed file in Explorer.
+The adapted desktop source contains a small `Nickvision.Parabolic.NativeHost` relay and `Nickvision.Parabolic.DownloadService`. The service routes detected MP4, HLS, and DASH URLs directly, uses yt-dlp for general discovery, and can use an explicitly configured self-hosted Cobalt instance as a fallback. It owns scheduled and active downloads after Firefox disconnects, enforces per-task bandwidth limits, relays progress, accepts pause/resume/cancel/priority commands, and can reveal a completed file in Explorer.
 
 The Windows installer publishes the host beside Parabolic, writes its absolute-path JSON manifest, and registers `com.nickvision.parabolic` for both 32-bit and 64-bit Firefox registry views. The host does not activate the WinUI window during the normal flow.
 
@@ -82,6 +83,8 @@ Firefox owns only the temporary relay connection. Accepted downloads continue in
 - Titles, format IDs and source-kind fields are length-limited before leaving the extension.
 - Page-controlled JavaScript cannot call Native Messaging directly; requests pass through the isolated content script and background validation.
 - Cookies are not collected or transmitted by this version.
+- A Cobalt token is stored only in Firefox local storage, is sent only to the configured Cobalt endpoint, and is never stored in Parabolic's recovery queue.
+- The official shared Cobalt API is not configured automatically; the user must provide an instance they operate or are authorized to use.
 - DRM decryption is outside the project scope.
 
 ## Local development

@@ -20,7 +20,7 @@ const nativePort = {
     nativeRequests.push(message);
     queueMicrotask(() => {
       const payload = message.type === "hello"
-        ? { appVersion: "test", protocolVersion: 2, capabilities: ["ytdlp-update", "persistent-queue", "priority"] }
+        ? { appVersion: "test", protocolVersion: 3, capabilities: ["ytdlp-update", "persistent-queue", "priority", "resolver-pipeline", "scheduling"] }
         : message.type === "list-downloads"
           ? { downloads: [] }
         : message.type === "download"
@@ -44,7 +44,7 @@ const nativePort = {
               : {};
       for (const listener of nativeMessageListeners) {
         listener({
-          protocolVersion: 2,
+          protocolVersion: 3,
           requestId: message.requestId,
           type: "response",
           ok: true,
@@ -64,7 +64,7 @@ const browser = {
       nativeHostName = name;
       return nativePort;
     },
-    getManifest() { return { version: "0.5.0" }; },
+    getManifest() { return { version: "0.6.0" }; },
     getURL(value) { return `moz-extension://test/${value}`; },
     onMessage: { addListener(listener) { runtimeMessageListeners.push(listener); } },
     onInstalled: { addListener() {} },
@@ -73,7 +73,19 @@ const browser = {
   },
   storage: {
     sync: {
-      async get(defaults) { return { ...defaults }; },
+      async get(defaults) {
+        return {
+          ...defaults,
+          resolverPreference: "yt-dlp",
+          cobaltEndpoint: "https://cobalt.example/",
+          cobaltAuthScheme: "bearer",
+          speedLimitKbps: 2048
+        };
+      },
+      async set() {}
+    },
+    local: {
+      async get(defaults) { return { ...defaults, cobaltAuthToken: "local-test-token" }; },
       async set() {}
     },
     onChanged: { addListener() {} }
@@ -137,7 +149,7 @@ async function send(message, sender = {}) {
   const bridge = await send({ type: "bridge-status" });
   assert.equal(bridge.available, true);
   assert.equal(nativeHostName, "com.nickvision.parabolic");
-  assert.equal(nativeRequests[0].protocolVersion, 2);
+  assert.equal(nativeRequests[0].protocolVersion, 3);
   assert.equal(nativeRequests[0].type, "hello");
 
   const sender = {
@@ -163,6 +175,15 @@ async function send(message, sender = {}) {
   assert.equal(request.payload.preset, "720");
   assert.equal(request.payload.formatId, "22");
   assert.equal(request.payload.priority, "normal");
+  assert.equal(request.payload.resolverPreference, "yt-dlp");
+  assert.equal(request.payload.cobaltEndpoint, "https://cobalt.example/");
+  assert.equal(request.payload.cobaltAuthScheme, "bearer");
+  assert.equal(request.payload.cobaltAuthToken, "local-test-token");
+  assert.equal(request.payload.speedLimitKbps, 2048);
+  assert.equal(request.payload.scheduledAt, "");
+
+  const mediaCatalog = await send({ type: "get-media", tabId: 42 }, sender);
+  assert.equal(Object.hasOwn(mediaCatalog.settings, "cobaltAuthToken"), false);
 
   const helloCountBeforePulse = nativeRequests.filter((item) => item.type === "hello").length;
   const pulse = await send({ type: "bridge-pulse" }, sender);
@@ -208,7 +229,7 @@ async function send(message, sender = {}) {
 
   for (const listener of nativeMessageListeners) {
     listener({
-      protocolVersion: 2,
+      protocolVersion: 3,
       type: "event",
       payload: {
         downloadId: "download-test",
