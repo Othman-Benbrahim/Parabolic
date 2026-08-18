@@ -7,12 +7,11 @@
 ### Download web video and audio from Parabolic or directly inside Firefox
 
 [![Windows](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/windows.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/windows.yml)
-[![Flatpak](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/flatpak.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/flatpak.yml)
-[![macOS](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/macos.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/macos.yml)
 [![Firefox Add-on](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/firefox.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/firefox.yml)
 
 [Features](#-features) •
 [Firefox integration](#-firefox-integration) •
+[Known limitations](#-known-limitations) •
 [Installation](#-installation) •
 [Building](#-building) •
 [Credits](#-credits)
@@ -20,7 +19,7 @@
 </div>
 
 > [!NOTE]
-> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Version **2026.8.5** strengthens permalink-first social-video resolution and adds Firefox-observed MP4 fallback after the bundled N_m3u8DL-RE path, coordinated with Firefox add-on **0.8.1**. Validate the Windows setup and unsigned add-on before publishing the final GitHub Release.
+> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). The validated browser release pairs **Parabolic 2026.8.5 for Windows** with the **Firefox add-on 0.8.1**. Facebook video recovery is confirmed. Some LinkedIn players are not yet resolved and are listed as a known limitation. The browser integration is Firefox-only; Chrome and Edge packages are not built or supported.
 
 ## ✨ Features
 
@@ -32,14 +31,13 @@
 - Keep browser downloads running after Firefox closes with a per-user background service.
 - Recover interrupted browser downloads from a dedicated SQLite queue.
 - Schedule downloads for a future time and order queued work with High, Normal and Low priorities.
-- Prefer the real post/Reel/activity permalink, then retry browser-detected non-DRM HLS/DASH streams with bundled N_m3u8DL-RE when yt-dlp extraction fails.
+- Prefer the real page/post/Reel permalink, then retry browser-detected non-DRM HLS/DASH streams with bundled N_m3u8DL-RE or a detected direct MP4/video stream when page extraction fails.
 - Keep optional self-hosted Cobalt resolution for cases without a usable detected stream.
 - Apply an optional bandwidth limit to each new browser download.
 - Renew scheduled Cobalt URLs when the task starts and fall back to the stable page when a direct CDN URL expires.
 - Choose conservative, balanced, or aggressive fragment/retry behavior for unstable networks and CDNs.
 - Explicitly inherit Parabolic authentication/proxy settings, use the local Firefox session, or disable cookies/proxy use for browser-started tasks.
-- Use native WinUI on Windows and the GNOME interface on Linux and macOS.
-- Build and package Windows x64/ARM64, Linux Flatpak x86_64/aarch64 and macOS x64/ARM64.
+- Use the native WinUI desktop application on Windows x64 or ARM64.
 
 ## 🦊 Firefox integration
 
@@ -56,6 +54,7 @@ On Windows, Firefox communicates with `com.nickvision.parabolic`, a lightweight 
 - synchronize active downloads after Firefox reconnects;
 - schedule downloads and persist their start time across service restarts;
 - prefer a durable page permalink with yt-dlp, then use N_m3u8DL-RE for a recent non-DRM HLS/DASH manifest detected by Firefox;
+- retry a recent direct MP4/video response observed by Firefox when neither the page extractor nor the manifest path succeeds;
 - use an explicitly configured Cobalt fallback when no usable detected stream is available;
 - apply a per-download bandwidth limit, including aria2 transfers;
 - renew temporary URLs at the actual scheduled start and retry transient CDN/network failures;
@@ -65,15 +64,23 @@ On Windows, Firefox communicates with `com.nickvision.parabolic`, a lightweight 
 
 The Windows installer is required for this integration because it installs the host manifest and Firefox registry entries. The portable Windows archive contains the host executable but does **not** register Native Messaging automatically.
 
-The desktop application works on Linux and macOS, but the Firefox Native Messaging bridge in this release is currently packaged for Windows only.
+The underlying Parabolic project remains cross-platform, but this fork's browser integration and the supported release path documented here target Windows and Firefox only.
+
+## ⚠️ Known limitations
+
+- Facebook videos have been validated with the permalink, HLS/DASH and direct-stream recovery paths.
+- Some LinkedIn players expose only transient, embedded or otherwise unusable media addresses. Those videos can still return **Parabolic could not find downloadable media**; improved LinkedIn handling is planned for a later release.
+- A direct CDN fallback can occasionally contain video without a separate audio track.
+- DRM-protected streams are deliberately unsupported. The project does not request, store or use decryption keys.
+- The Firefox Native Messaging bridge requires the installed Windows setup. The portable archive does not register the bridge automatically.
 
 ## 📥 Installation
 
-Download versioned packages from this repository's [Releases](https://github.com/Othman-Benbrahim/Parabolic/releases).
+Download versioned packages from this repository's [Releases](https://github.com/Othman-Benbrahim/Parabolic/releases). For release `2026.8.5`, publish the Windows installer matching the computer architecture and the Firefox `0.8.1` package.
 
 ### Windows
 
-1. Download the x64 or ARM64 setup executable for your computer.
+1. Download `NickvisionParabolicSetup-x64` for most Windows computers, or the ARM64 setup for Windows on ARM.
 2. Close Firefox and Parabolic.
 3. Run the installer. It can be installed over an earlier adapted build.
 4. Install Firefox add-on `0.8.1`, then reload the video page.
@@ -82,28 +89,13 @@ Use the installer rather than the portable archive when you want the Firefox bri
 
 ### Firefox add-on
 
-A permanently installed add-on must be signed by Mozilla. An unsigned XPI from GitHub Actions is intended for development or submission:
+A permanently installed add-on must be signed by Mozilla. Upload the add-on ZIP to Mozilla Add-ons for validation and signing. The unsigned XPI attached to the GitHub release is intended for testing, review and development:
 
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Select **Load Temporary Add-on**.
 3. Select the XPI or `extension/firefox/manifest.json`.
 
 Temporary add-ons are removed when Firefox closes.
-
-### Linux Flatpak
-
-Download the bundle matching your CPU, then run:
-
-```bash
-flatpak install ./Parabolic-2026.8.4-Linux-x86_64.flatpak
-flatpak run org.nickvision.tubeconverter
-```
-
-Use the `aarch64` bundle instead on ARM64 Linux.
-
-### macOS
-
-Download and extract the x64 or ARM64 archive produced for your Mac, then move `Parabolic.app` to Applications.
 
 ## ⚖️ Copyright notice
 
