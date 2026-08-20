@@ -59,7 +59,7 @@ jobs:
           asset_url="$(curl --fail --silent --show-error --location --header "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/nilaoda/N_m3u8DL-RE/releases/tags/${NM3U8DL_VERSION}" | jq -r '.assets[] | select(.name | contains("${{ matrix.variant.nm3u8dl }}")) | .browser_download_url' | head -n1)"
           test -n "$asset_url"
           curl --fail --location "$asset_url" -o /tmp/nm3u8dl/archive
-          if file /tmp/nm3u8dl/archive | grep -qi 'zip'; then unzip -q /tmp/nm3u8dl/archive -d /tmp/nm3u8dl/extracted; else tar -xf /tmp/nm3u8dl/archive -C /tmp/nm3u8dl; fi
+          tar -xzf /tmp/nm3u8dl/archive -C /tmp/nm3u8dl
           find /tmp/nm3u8dl -type f -name 'N_m3u8DL-RE' -exec cp {} resources/linux/tools/N_m3u8DL-RE \;
           chmod +x resources/linux/tools/yt-dlp resources/linux/tools/N_m3u8DL-RE resources/linux/tools/deno
       - name: Validate cross-platform bridge sources

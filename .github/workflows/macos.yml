@@ -19,6 +19,7 @@ jobs:
     name: "GNOME on macOS"
     if: ${{ github.event.pull_request.user.login != 'weblate' }}
     strategy:
+      fail-fast: false
       matrix:
         variant:
           - arch: arm64
@@ -44,7 +45,7 @@ jobs:
           test -n "$asset_url"
           mkdir -p /tmp/parabolic-nm3u8dl
           curl --fail --location "$asset_url" -o /tmp/parabolic-nm3u8dl/archive
-          if file /tmp/parabolic-nm3u8dl/archive | grep -qi 'zip'; then unzip -q /tmp/parabolic-nm3u8dl/archive -d /tmp/parabolic-nm3u8dl/extracted; else tar -xf /tmp/parabolic-nm3u8dl/archive -C /tmp/parabolic-nm3u8dl; fi
+          tar -xzf /tmp/parabolic-nm3u8dl/archive -C /tmp/parabolic-nm3u8dl
           find /tmp/parabolic-nm3u8dl -type f -name 'N_m3u8DL-RE' -exec cp {} "${{ github.workspace }}/resources/macos/N_m3u8DL-RE" \;
           chmod +x "${{ github.workspace }}/resources/macos/yt-dlp" "${{ github.workspace }}/resources/macos/N_m3u8DL-RE"
       - uses: actions/setup-dotnet@v5
