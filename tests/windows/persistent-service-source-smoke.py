@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 manifest = json.loads((ROOT / "extension/firefox/manifest.json").read_text(encoding="utf-8"))
 assert manifest["manifest_version"] == 3
-assert manifest["version"] == "0.8.1"
+assert manifest["version"] == "0.8.2"
 
 ET.parse(ROOT / "Nickvision.Parabolic.DownloadService/Nickvision.Parabolic.DownloadService.csproj")
 ET.parse(ROOT / "Nickvision.Parabolic.NativeHost/Nickvision.Parabolic.NativeHost.csproj")
@@ -48,7 +48,10 @@ assert "PersistentDownloadCoordinator" in coordinator
 assert "NamedPipeServerStreamAcl.Create" in service
 assert "WindowsIdentity.GetCurrent" in service
 assert "PipeAccessRights.FullControl" in service
-assert "PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly" not in service
+windows_pipe_section = service.split("#if WINDOWS", 1)[1].split("#else", 1)[0]
+unix_pipe_section = service.split("#else", 1)[1].split("#endif", 1)[0]
+assert "NamedPipeServerStreamAcl.Create" in windows_pipe_section
+assert "PipeOptions.CurrentUserOnly" in unix_pipe_section
 assert "DOWNLOAD_SERVICE_PROJECT" in workflow
 assert "DOWNLOAD_SERVICE_FILES_PATH" in workflow
 assert "Nickvision.Parabolic.DownloadService.exe" in installer

@@ -173,15 +173,39 @@ public sealed class PersistentDownloadCoordinator : IDisposable
         {
             throw new NativeRequestException("FILE_NOT_FOUND", "The completed download file was not found.");
         }
-        if (!OperatingSystem.IsWindows())
+        ProcessStartInfo startInfo;
+        if (OperatingSystem.IsWindows())
         {
-            throw new NativeRequestException("UNSUPPORTED_PLATFORM", "Opening the containing folder is available on Windows only.");
+            startInfo = new ProcessStartInfo("explorer.exe")
+            {
+                UseShellExecute = true
+            };
+            startInfo.ArgumentList.Add($"/select,{session.Path}");
         }
-        Process.Start(new ProcessStartInfo("explorer.exe")
+        else if (OperatingSystem.IsMacOS())
         {
-            Arguments = $"/select,\"{session.Path}\"",
-            UseShellExecute = true
-        });
+            startInfo = new ProcessStartInfo("open")
+            {
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add("-R");
+            startInfo.ArgumentList.Add(session.Path);
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            var directory = Path.GetDirectoryName(session.Path)
+                ?? throw new NativeRequestException("FILE_NOT_FOUND", "The completed download folder was not found.");
+            startInfo = new ProcessStartInfo("xdg-open")
+            {
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add(directory);
+        }
+        else
+        {
+            throw new NativeRequestException("UNSUPPORTED_PLATFORM", "Opening the containing folder is not supported on this operating system.");
+        }
+        Process.Start(startInfo);
     }
 
     public void Dispose()

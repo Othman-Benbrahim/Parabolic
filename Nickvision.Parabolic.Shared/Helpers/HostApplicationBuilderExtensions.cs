@@ -18,8 +18,11 @@ public static class HostApplicationBuilderExtensions
         {
             var appInfo = new AppInfo("org.nickvision.tubeconverter", "Nickvision Parabolic", "Parabolic")
             {
-                Version = new AppVersion("2026.8.5"),
+                Version = new AppVersion("2026.8.6"),
                 Changelog = """
+                - Added native Linux x64 and ARM64 packages with per-user Firefox and systemd integration
+                - Added macOS Intel and Apple Silicon bundles with per-user Firefox and LaunchAgent integration
+                - Ported the persistent download service and Native Messaging relay to Unix domain sockets
                 - Added permalink-first resolution for Facebook, LinkedIn, and other Firefox pages
                 - Added N_m3u8DL-RE fallback for browser-detected non-DRM HLS and DASH streams
                 - Added automatic Firefox User-Agent and stream Referer forwarding for manifest downloads
@@ -30,7 +33,7 @@ public static class HostApplicationBuilderExtensions
                 - Added modular direct, yt-dlp, and optional Cobalt media resolution
                 - Added direct MP4, HLS, and DASH routing from Firefox detections
                 - Added persistent scheduled downloads and per-download bandwidth limits
-                - Added a persistent Windows download service that survives Firefox shutdown
+                - Added a persistent cross-platform download service that survives Firefox shutdown
                 - Added high, normal, and low download queue priorities
                 - Added a separate SQLite recovery queue for browser downloads
                 - Added pause, resume, priority, and active-download synchronization commands

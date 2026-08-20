@@ -64,7 +64,7 @@ const browser = {
       nativeHostName = name;
       return nativePort;
     },
-    getManifest() { return { version: "0.8.1" }; },
+    getManifest() { return { version: "0.8.2" }; },
     getURL(value) { return `moz-extension://test/${value}`; },
     onMessage: { addListener(listener) { runtimeMessageListeners.push(listener); } },
     onInstalled: { addListener() {} },

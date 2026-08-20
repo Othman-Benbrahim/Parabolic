@@ -7,6 +7,8 @@
 ### Download web video and audio from Parabolic or directly inside Firefox
 
 [![Windows](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/windows.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/windows.yml)
+[![Linux native](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/linux-native.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/linux-native.yml)
+[![macOS](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/macos.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/macos.yml)
 [![Firefox Add-on](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/firefox.yml/badge.svg)](https://github.com/Othman-Benbrahim/Parabolic/actions/workflows/firefox.yml)
 
 [Features](#-features) •
@@ -19,7 +21,7 @@
 </div>
 
 > [!NOTE]
-> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). The validated browser release pairs **Parabolic 2026.8.5 for Windows** with the **Firefox add-on 0.8.1**. Facebook video recovery is confirmed. Some LinkedIn players are not yet resolved and are listed as a known limitation. The browser integration is Firefox-only; Chrome and Edge packages are not built or supported.
+> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Release **Parabolic 2026.8.6** pairs with the Firefox add-on **0.8.2** on Windows, native Linux and macOS. Facebook video recovery is confirmed. Some LinkedIn players are not yet resolved and are listed as a known limitation. Chrome and Edge packages are not built or supported.
 
 ## ✨ Features
 
@@ -37,13 +39,13 @@
 - Renew scheduled Cobalt URLs when the task starts and fall back to the stable page when a direct CDN URL expires.
 - Choose conservative, balanced, or aggressive fragment/retry behavior for unstable networks and CDNs.
 - Explicitly inherit Parabolic authentication/proxy settings, use the local Firefox session, or disable cookies/proxy use for browser-started tasks.
-- Use the native WinUI desktop application on Windows x64 or ARM64.
+- Use WinUI on Windows x64/ARM64 or the GNOME interface on native Linux x64/ARM64 and macOS Intel/Apple Silicon.
 
 ## 🦊 Firefox integration
 
 The Firefox add-on detects a suitable video and places a **Download video** control directly over the player. The main button downloads with the saved preset; its arrow opens quality, exact-format and yt-dlp update actions.
 
-On Windows, Firefox communicates with `com.nickvision.parabolic`, a lightweight Native Messaging relay installed with Parabolic. The relay forwards requests over a current-user named pipe to the persistent download service. It can:
+Firefox communicates with `com.nickvision.parabolic`, a lightweight Native Messaging relay installed with Parabolic. The relay forwards requests over a current-user named pipe (Windows) or Unix domain socket (Linux/macOS) to the persistent download service. It can:
 
 - start a download without bringing the Parabolic window to the foreground;
 - use Best, 1080p, 720p, 480p and Audio-only presets;
@@ -62,9 +64,7 @@ On Windows, Firefox communicates with `com.nickvision.parabolic`, a lightweight 
 - inherit Parabolic's configured proxy or force a direct connection per browser task;
 - detect and install the latest stable yt-dlp version on explicit request.
 
-The Windows installer is required for this integration because it installs the host manifest and Firefox registry entries. The portable Windows archive contains the host executable but does **not** register Native Messaging automatically.
-
-The underlying Parabolic project remains cross-platform, but this fork's browser integration and the supported release path documented here target Windows and Firefox only.
+The Windows installer registers the bridge automatically. Native Linux provides `install.sh`, while the macOS ZIP provides **Install Firefox integration.command** after the application is moved into `/Applications`. The Windows portable archive alone does **not** register Native Messaging.
 
 ## ⚠️ Known limitations
 
@@ -72,20 +72,37 @@ The underlying Parabolic project remains cross-platform, but this fork's browser
 - Some LinkedIn players expose only transient, embedded or otherwise unusable media addresses. Those videos can still return **Parabolic could not find downloadable media**; improved LinkedIn handling is planned for a later release.
 - A direct CDN fallback can occasionally contain video without a separate audio track.
 - DRM-protected streams are deliberately unsupported. The project does not request, store or use decryption keys.
-- The Firefox Native Messaging bridge requires the installed Windows setup. The portable archive does not register the bridge automatically.
+- Firefox must be restarted after installing or replacing a Native Messaging manifest.
+- The macOS CI bundle is ad-hoc signed. Public distribution outside GitHub testing should additionally use an Apple Developer ID signature and notarization.
 
 ## 📥 Installation
 
-Download versioned packages from this repository's [Releases](https://github.com/Othman-Benbrahim/Parabolic/releases). For release `2026.8.5`, publish the Windows installer matching the computer architecture and the Firefox `0.8.1` package.
+Download versioned packages from this repository's [Releases](https://github.com/Othman-Benbrahim/Parabolic/releases). For release `2026.8.6`, publish the package matching the operating system and architecture together with Firefox add-on `0.8.2`.
 
 ### Windows
 
 1. Download `NickvisionParabolicSetup-x64` for most Windows computers, or the ARM64 setup for Windows on ARM.
 2. Close Firefox and Parabolic.
 3. Run the installer. It can be installed over an earlier adapted build.
-4. Install Firefox add-on `0.8.1`, then reload the video page.
+4. Install Firefox add-on `0.8.2`, then reload the video page.
 
 Use the installer rather than the portable archive when you want the Firefox bridge.
+
+### Native Linux (without Flatpak)
+
+1. Install GTK4, libadwaita, FFmpeg and aria2 from the distribution packages.
+2. Extract `Parabolic-2026.8.6-linux-x64.tar.gz` or the ARM64 archive.
+3. Run `./install.sh` from the extracted directory, then restart Firefox.
+
+The per-user installation is stored below `~/.local`, writes Firefox's manifest below `~/.mozilla`, and enables `parabolic-download-service.service` with `systemd --user`. If the user service manager is unavailable, Firefox starts the service on demand. Run `./uninstall.sh` to remove it.
+
+### macOS
+
+1. Extract the Intel x64 or Apple Silicon ARM64 ZIP.
+2. Move `Parabolic.app` into `/Applications`.
+3. Open **Install Firefox integration.command**, then restart Firefox.
+
+The command installs only per-user Firefox and LaunchAgent files. The GitHub Actions bundle is ad-hoc signed; Gatekeeper may require explicit approval for development builds.
 
 ### Firefox add-on
 
@@ -136,7 +153,7 @@ DRM decryption is not supported.
 
 Parabolic targets **.NET 10**.
 
-Additional GNOME dependencies are GTK4, libadwaita and blueprint-compiler. Windows builds require the Windows App SDK and gettext tooling.
+Additional GNOME dependencies are GTK4, libadwaita and blueprint-compiler. Linux runtime packages also require system FFmpeg and aria2. Windows builds require the Windows App SDK and gettext tooling.
 
 ```bash
 # GNOME desktop application
@@ -152,6 +169,14 @@ dotnet publish .\Nickvision.Parabolic.NativeHost -c Release -r win-x64
 
 # Persistent background download service
 dotnet publish .\Nickvision.Parabolic.DownloadService -c Release -r win-x64
+```
+
+```bash
+# Native Linux release package (tools are downloaded by the workflow first)
+resources/linux/package-native.sh linux-x64 x64
+
+# macOS bundle and Firefox integration package, executed on macOS
+resources/macos/publish-and-package.sh osx-arm64
 ```
 
 The GitHub Actions workflows are the recommended release path because they also package dependencies, validate the Native Messaging protocol and create installers or bundles for each architecture.

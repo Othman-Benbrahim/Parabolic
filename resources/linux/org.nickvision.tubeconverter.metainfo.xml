@@ -60,6 +60,13 @@
     <display_length compare="ge">360</display_length>
   </requires>
   <releases>
+    <release version="2026.8.6" date="2026-08-20">
+      <description translate="no">
+        <p>- Added native Linux x64 and ARM64 packages with per-user Firefox and systemd integration</p>
+        <p>- Added macOS Intel and Apple Silicon packages with per-user Firefox and LaunchAgent integration</p>
+        <p>- Ported the persistent Native Messaging service to secured Unix domain sockets</p>
+      </description>
+    </release>
     <release version="2026.8.4" date="2026-08-18">
       <description translate="no">
         <p>- Added permalink-first resolution for Firefox media pages</p>
