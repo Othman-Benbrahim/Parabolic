@@ -76,6 +76,7 @@ publish_project() {
         "../../$project/$project.csproj" \
         --runtime "$RUNTIME" \
         --self-contained true \
+        -p:RuntimeIdentifiers="$RUNTIME" \
         -p:PublishReadyToRun=true \
         --output "$output"
 }

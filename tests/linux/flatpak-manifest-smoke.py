@@ -96,10 +96,16 @@ for project in (
     "Nickvision.Parabolic.DownloadService",
 ):
     require(project in publish_script, f"Flatpak publish script must include {project}")
+require(
+    '-p:RuntimeIdentifiers="$RUNTIME"' in publish_script,
+    "each Flatpak job must restore only its own .NET runtime identifier",
+)
 require("parabolic-pipes" in publish_script and "TMPDIR" in publish_script, "Native Messaging bridge must use the shared Flatpak pipe directory")
 require("flatpak run --command=org.nickvision.tubeconverter.NativeHost" in firefox_installer, "Firefox host launcher must enter the Parabolic sandbox")
 require("parabolic-media-detector@othmanbenbrahim.dev" in firefox_installer, "Firefox extension ID must be allowlisted")
 require("Parabolic-2026.8.6-flatpak-" in workflow, "architecture-specific Flatpak artifacts are required")
+require("upload-artifact: false" in workflow, "Flatpak builder automatic artifact upload must be disabled")
+require("Upload Flatpak bundle" in workflow, "Flatpak bundles must be uploaded explicitly")
 require("firefox-flatpak-integration" in workflow, "Firefox integration helper artifact is required")
 
 ffmpeg_module = next(

@@ -47,7 +47,13 @@ jobs:
           arch: ${{ matrix.variant.arch }}
           restore-cache: true
           verbose: true
-          artifact-name: Parabolic-2026.8.6-flatpak-${{ matrix.variant.arch }}
+          upload-artifact: false
+      - name: Upload Flatpak bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Parabolic-2026.8.6-flatpak-${{ matrix.variant.arch }}
+          path: Parabolic-2026.8.6-${{ matrix.variant.arch }}.flatpak
+          if-no-files-found: error
       - name: Package Firefox integration helper
         if: ${{ matrix.variant.arch == 'x86_64' }}
         run: |
@@ -56,7 +62,8 @@ jobs:
             install-flatpak-firefox-integration.sh \
             uninstall-flatpak-firefox-integration.sh \
             FLATPAK-FIREFOX-INTEGRATION.md
-      - uses: actions/upload-artifact@v4
+      - name: Upload Firefox integration helper
+        uses: actions/upload-artifact@v4
         if: ${{ matrix.variant.arch == 'x86_64' }}
         with:
           name: Parabolic-2026.8.6-firefox-flatpak-integration
