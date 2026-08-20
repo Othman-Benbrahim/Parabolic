@@ -51,23 +51,9 @@ Adw.Dialog root {
               activates-default: true;
             }
 
-            Adw.ActionRow {
+            Adw.ButtonRow selectBatchFileRow {
               title: _("Select Batch File");
-              activatable-widget: selectBatchFileButton;
-
-              [prefix]
-              Gtk.Image {
-                icon-name: "document-open-symbolic";
-              }
-
-              [suffix]
-              Gtk.Button selectBatchFileButton {
-                valign: center;
-                icon-name: "document-open-symbolic";
-                tooltip-text: _("Select Batch File");
-
-                styles [ "flat" ]
-              }
+              start-icon-name: "document-open-symbolic";
             }
           }
 
@@ -114,10 +100,8 @@ Adw.Dialog root {
 
         content: Adw.StatusPage discoveringPage {
           description: _("This may take some time...");
-          child: Gtk.Spinner {
-            spinning: true;
-            width-request: 48;
-            height-request: 48;
+          paintable: Adw.SpinnerPaintable {
+            widget: discoveringPage;
           };
         };
       };

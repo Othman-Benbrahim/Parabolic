@@ -5,11 +5,11 @@
 Push the updated source to `main`. The following workflows generate the release files:
 
 - `windows.yml`: Windows x64 and ARM64 installers and portable packages;
-- `linux-native.yml`: native Linux x64 and ARM64 tarballs, without Flatpak;
+- `flatpak.yml`: Linux x86_64 and aarch64 Flatpak bundles plus the Firefox integration helper;
 - `macos.yml`: Intel x64 and Apple Silicon ARM64 application ZIPs;
 - `firefox.yml`: unsigned Firefox XPI for testing and Mozilla review.
 
-The native OS workflows build on their real target runners. This is important for the GNOME libraries, macOS application bundle, architecture-matched N_m3u8DL-RE binary and platform-specific signing steps.
+The Flatpak workflow builds against GNOME 50 and packages the architecture-matched N_m3u8DL-RE binary. Windows and macOS continue to build on their target runners.
 
 ## PowerShell: commit and launch builds
 
@@ -17,13 +17,13 @@ The native OS workflows build on their real target runners. This is important fo
 Set-Location "C:\Users\othma\Desktop\Parabolic-release"
 
 git add --all
-git commit -m "Add native Linux and macOS Firefox integration"
+git commit -m "Migrate Linux distribution to Flatpak"
 git push origin main
 
 # A push to main already starts all four workflows. These commands are useful
 # only to rerun them manually without a new commit.
 gh workflow run windows.yml --ref main
-gh workflow run linux-native.yml --ref main
+gh workflow run flatpak.yml --ref main
 gh workflow run macos.yml --ref main
 gh workflow run firefox.yml --ref main
 
@@ -41,7 +41,7 @@ Download all successful artifacts into one directory:
 ```powershell
 New-Item -ItemType Directory -Force .\release-assets | Out-Null
 gh run download WINDOWS_RUN_ID -D .\release-assets\windows
-gh run download LINUX_RUN_ID -D .\release-assets\linux
+gh run download FLATPAK_RUN_ID -D .\release-assets\linux
 gh run download MACOS_RUN_ID -D .\release-assets\macos
 gh run download FIREFOX_RUN_ID -D .\release-assets\firefox
 ```
@@ -50,8 +50,9 @@ gh run download FIREFOX_RUN_ID -D .\release-assets\firefox
 
 - `Parabolic-2026.8.6-Windows-x64-Setup.exe`
 - `Parabolic-2026.8.6-Windows-arm64-Setup.exe`
-- `Parabolic-2026.8.6-linux-x64.tar.gz`
-- `Parabolic-2026.8.6-linux-arm64.tar.gz`
+- `Parabolic-2026.8.6-x86_64.flatpak`
+- `Parabolic-2026.8.6-aarch64.flatpak`
+- `Parabolic-2026.8.6-firefox-flatpak-integration.tar.gz`
 - `Parabolic-2026.8.6-macos-x64.zip`
 - `Parabolic-2026.8.6-macos-arm64.zip`
 - `parabolic-download-manager-0.8.2-unsigned.xpi`

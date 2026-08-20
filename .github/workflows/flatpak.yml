@@ -11,28 +11,54 @@ permissions:
   contents: read
 jobs:
   gnome-flatpak:
-    name: "GNOME on Flatpak"
+    name: "Flatpak (${{ matrix.variant.arch }})"
     if: ${{ github.event.pull_request.user.login != 'weblate' }}
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-49
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged
     strategy:
+      fail-fast: false
       matrix:
         variant:
           - arch: x86_64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
+            nm3u8dl: linux-x64
           - arch: aarch64
             runner: ubuntu-24.04-arm
+            nm3u8dl: linux-arm64
     runs-on: ${{ matrix.variant.runner }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Prepare N_m3u8DL-RE for Flatpak
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash resources/linux/prepare-flatpak-tools.sh "${{ matrix.variant.nm3u8dl }}"
       - name: Validate Flatpak manifest inputs
-        run: python3 tests/linux/flatpak-manifest-smoke.py
+        run: |
+          python3 tests/linux/flatpak-manifest-smoke.py
+          python3 tests/cross-platform/native-bridge-source-smoke.py
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: org.nickvision.tubeconverter.flatpak
+          bundle: Parabolic-2026.8.6-${{ matrix.variant.arch }}.flatpak
           manifest-path: flatpak/org.nickvision.tubeconverter.json
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.variant.arch }}
           restore-cache: true
           verbose: true
+          artifact-name: Parabolic-2026.8.6-flatpak-${{ matrix.variant.arch }}
+      - name: Package Firefox integration helper
+        if: ${{ matrix.variant.arch == 'x86_64' }}
+        run: |
+          tar -czf Parabolic-2026.8.6-firefox-flatpak-integration.tar.gz \
+            -C resources/linux \
+            install-flatpak-firefox-integration.sh \
+            uninstall-flatpak-firefox-integration.sh \
+            FLATPAK-FIREFOX-INTEGRATION.md
+      - uses: actions/upload-artifact@v4
+        if: ${{ matrix.variant.arch == 'x86_64' }}
+        with:
+          name: Parabolic-2026.8.6-firefox-flatpak-integration
+          path: Parabolic-2026.8.6-firefox-flatpak-integration.tar.gz
+          if-no-files-found: error

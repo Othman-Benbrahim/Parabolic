@@ -1,7 +1,7 @@
 # Parabolic Firefox Native Host
 
 `Nickvision.Parabolic.NativeHost` implements protocol version 3 from
-`extension/firefox/NATIVE-MESSAGING-PROTOCOL.md` for Windows, native Linux and macOS.
+`extension/firefox/NATIVE-MESSAGING-PROTOCOL.md` for Windows, Linux Flatpak and macOS.
 
 It is a short-lived windowless relay launched by Firefox. It starts the
 persistent per-user download service when needed, connects to the secured named
@@ -29,7 +29,7 @@ or queued.
 For automatic Firefox downloads, the service tries the durable page permalink
 with yt-dlp first. If extraction fails and Firefox supplied a recent HLS/DASH
 manifest, it starts the bundled N_m3u8DL-RE executable without requesting DRM
-keys. Each native package supplies the architecture-matched executable.
+keys. Each platform package supplies the architecture-matched executable.
 
 ## Publish and smoke test
 
@@ -40,8 +40,8 @@ dotnet publish .\Nickvision.Parabolic.NativeHost -c Release --no-restore --runti
 dotnet publish .\Nickvision.Parabolic.DownloadService -c Release --no-restore --runtime win-x64
 ```
 
-The Windows workflow publishes x64 and ARM64 installers. The native Linux
-workflow publishes x64 and ARM64 tarballs with a per-user installer. The macOS
+The Windows workflow publishes x64 and ARM64 installers. The Flatpak workflow
+publishes x86_64/aarch64 bundles and a host-side Firefox helper. The macOS
 workflow publishes Intel and Apple Silicon ZIPs with a Firefox and LaunchAgent
 integration command.
 

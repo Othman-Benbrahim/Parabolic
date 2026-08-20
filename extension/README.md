@@ -3,7 +3,7 @@
 # Features
 - **In-Player Download Button (Firefox)**: The primary download control appears automatically over the active video, so the toolbar popup is not required.
 - **One-Click Download Presets (Firefox)**: Download the best quality, cap video at 1080p/720p/480p, or extract audio from the page itself.
-- **Native Background Downloads (Firefox)**: Adapted Windows, native Linux and macOS builds start downloads and return progress through Native Messaging without switching away from Firefox.
+- **Native Background Downloads (Firefox)**: Adapted Windows, Linux Flatpak and macOS builds start downloads and return progress through Native Messaging without switching away from Firefox.
 - **Persistent Queue (Firefox)**: Accepted downloads continue after Firefox closes and recover from a dedicated SQLite queue after interruption.
 - **Priority Scheduling**: New browser downloads can use High, Normal or Low priority.
 - **Scheduled Downloads**: Queue a future start time that is persisted by the per-user background service.
@@ -25,4 +25,4 @@
 
 The enhanced detector is Firefox-only and documented in [`firefox/ARCHITECTURE.md`](firefox/ARCHITECTURE.md). It can be loaded temporarily from `about:debugging` by selecting `firefox/manifest.json`. The legacy Chromium source directory is not built or supported by this roadmap.
 
-Facebook recovery is validated in version 0.8.2. Some LinkedIn video players still expose no durable or usable media address and are a documented limitation for this release. The same Firefox package is used on Windows, native Linux and macOS; each Parabolic package installs the OS-specific native bridge.
+Facebook recovery is validated in version 0.8.2. Some LinkedIn video players still expose no durable or usable media address and are a documented limitation for this release. The same Firefox package is used on Windows, Linux Flatpak and macOS; each platform supplies its bridge, with a separate host-side registration helper for Linux.

@@ -40,6 +40,8 @@ PREFIX="$1"
 RUNTIME="$2"
 BIN_DIR="$PREFIX/bin"
 LIB_DIR="$PREFIX/lib/$APP_ID"
+APP_DIR="$LIB_DIR/app"
+BRIDGE_DIR="$LIB_DIR/bridge"
 DATA_DIR="$PREFIX/share"
 info "Bin directory: $BIN_DIR"
 info "Lib directory: $LIB_DIR"
@@ -53,33 +55,41 @@ echo -e "${BOLD}${BLUE}=========================================================
 
 # Create main directories
 info "Creating directories..."
-mkdir -p "$BIN_DIR" "$LIB_DIR" "$DATA_DIR"
+mkdir -p "$BIN_DIR" "$APP_DIR" "$BRIDGE_DIR" "$DATA_DIR"
 success "Created directories."
 
-# Publish application
-info "Publishing application..."
+# Publish application and Firefox bridge
+info "Publishing application and Firefox bridge..."
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
-if [ -n "${container:-}" ]; then
+publish_project() {
+    local project="$1"
+    local output="$2"
+    local source_args=()
+    if [[ -n "${container:-}" ]]; then
+        source_args=(
+            --source "$CURRENT_PWD/nuget-sources"
+            --source "/usr/lib/sdk/dotnet10/nuget/packages"
+        )
+    fi
     dotnet publish -c Release \
-        --source "$CURRENT_PWD/nuget-sources" \
-        --source "/usr/lib/sdk/dotnet10/nuget/packages" \
-        "../../$PROJECT/$PROJECT.csproj" \
+        "${source_args[@]}" \
+        "../../$project/$project.csproj" \
         --runtime "$RUNTIME" \
         --self-contained true \
-        -p:PublishReadyToRun=true
-else
-    dotnet publish -c Release \
-        "../../$PROJECT/$PROJECT.csproj" \
-        --runtime "$RUNTIME" \
-        --self-contained true \
-        -p:PublishReadyToRun=true
-fi
-PUBLISH_DIR="$(find "../../$PROJECT/bin/Release" -type d -name publish | head -n1)"
-if [[ ! -d "$PUBLISH_DIR" ]]; then
-    error "Publish directory not found!"
-fi
-cp -a "$PUBLISH_DIR/." "$LIB_DIR"
-success "Published application to $LIB_DIR."
+        -p:PublishReadyToRun=true \
+        --output "$output"
+}
+
+publish_project "$PROJECT" "$APP_DIR"
+publish_project "Nickvision.Parabolic.NativeHost" "$BRIDGE_DIR"
+publish_project "Nickvision.Parabolic.DownloadService" "$BRIDGE_DIR"
+
+[[ -x "$APP_DIR/$PROJECT" ]] || error "Published GNOME executable is missing."
+[[ -x "$BRIDGE_DIR/Nickvision.Parabolic.NativeHost" ]] || error "Published Native Messaging host is missing."
+[[ -x "$BRIDGE_DIR/Nickvision.Parabolic.DownloadService" ]] || error "Published download service is missing."
+[[ -x "$BIN_DIR/N_m3u8DL-RE" ]] || error "Bundled N_m3u8DL-RE executable is missing."
+install -Dm644 "../licenses/N_m3u8DL-RE-LICENSE.txt" "$LIB_DIR/N_m3u8DL-RE-LICENSE.txt"
+success "Published application to $APP_DIR and Firefox bridge to $BRIDGE_DIR."
 
 # Create desktop file
 info "Creating desktop file..."
@@ -87,7 +97,7 @@ DESKTOP_FILE="$DATA_DIR/applications/$APP_ID.desktop"
 mkdir -p "$(dirname "$DESKTOP_FILE")"
 cp "$APP_ID.desktop.in" "$DESKTOP_FILE"
 sed -i "s|@APP_ID@|$APP_ID|g" "$DESKTOP_FILE"
-sed -i "s|@LIB_DIR@|$LIB_DIR|g" "$DESKTOP_FILE"
+sed -i "s|@LIB_DIR@|$APP_DIR|g" "$DESKTOP_FILE"
 sed -i "s|@OUTPUT_NAME@|$PROJECT|g" "$DESKTOP_FILE"
 success "Created desktop file at $DESKTOP_FILE."
 
@@ -97,7 +107,7 @@ SERVICE_FILE="$DATA_DIR/dbus-1/services/$APP_ID.service"
 mkdir -p "$(dirname "$SERVICE_FILE")"
 cp "$APP_ID.service.in" "$SERVICE_FILE"
 sed -i "s|@APP_ID@|$APP_ID|g" "$SERVICE_FILE"
-sed -i "s|@LIB_DIR@|$LIB_DIR|g" "$SERVICE_FILE"
+sed -i "s|@LIB_DIR@|$APP_DIR|g" "$SERVICE_FILE"
 sed -i "s|@OUTPUT_NAME@|$PROJECT|g" "$SERVICE_FILE"
 success "Created service file at $SERVICE_FILE."
 
@@ -105,10 +115,25 @@ success "Created service file at $SERVICE_FILE."
 info "Creating launcher script..."
 LAUNCHER_FILE="$BIN_DIR/$APP_ID"
 cp "$APP_ID.in" "$LAUNCHER_FILE"
-sed -i "s|@LIB_DIR@|$LIB_DIR|g" "$LAUNCHER_FILE"
+sed -i "s|@LIB_DIR@|$APP_DIR|g" "$LAUNCHER_FILE"
 sed -i "s|@OUTPUT_NAME@|$PROJECT|g" "$LAUNCHER_FILE"
 chmod +x "$LAUNCHER_FILE"
 success "Created launcher script at $LAUNCHER_FILE."
+
+# Create the command launched by the host-side Firefox Native Messaging wrapper.
+info "Creating Firefox Native Messaging command..."
+NATIVE_HOST_LAUNCHER="$BIN_DIR/$APP_ID.NativeHost"
+cat > "$NATIVE_HOST_LAUNCHER" <<EOF
+#!/bin/sh
+set -eu
+PIPE_DIR="\${XDG_RUNTIME_DIR:-/tmp}/parabolic-pipes"
+mkdir -p "\$PIPE_DIR"
+chmod 700 "\$PIPE_DIR"
+export TMPDIR="\$PIPE_DIR"
+exec "$BRIDGE_DIR/Nickvision.Parabolic.NativeHost" "\$@"
+EOF
+chmod +x "$NATIVE_HOST_LAUNCHER"
+success "Created Native Messaging command at $NATIVE_HOST_LAUNCHER."
 
 # Copy metadata file
 info "Copying metadata file..."

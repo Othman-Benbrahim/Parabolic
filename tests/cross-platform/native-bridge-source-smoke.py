@@ -37,24 +37,24 @@ assert 'OperatingSystem.IsLinux()' in coordinator and 'ProcessStartInfo("xdg-ope
 add_download_blueprint = (ROOT / "Nickvision.Parabolic.GNOME/Blueprints/AddDownloadDialog.blp").read_text(encoding="utf-8")
 add_download_view = (ROOT / "Nickvision.Parabolic.GNOME/Views/AddDownloadDialog.cs").read_text(encoding="utf-8-sig")
 gnome_blueprints = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "Nickvision.Parabolic.GNOME/Blueprints").glob("*.blp"))
-for libadwaita_16_widget in ("Adw.ButtonRow", "Adw.Spinner", "Adw.SpinnerPaintable"):
-    assert libadwaita_16_widget not in gnome_blueprints
-assert "Adw.ActionRow" in add_download_blueprint
-assert "Gtk.Spinner" in add_download_blueprint
-assert "selectBatchFileButton" in add_download_blueprint and "selectBatchFileButton" in add_download_view
+for gnome_50_widget in ("Adw.ButtonRow", "Adw.Spinner", "Adw.SpinnerPaintable", "Adw.ToggleGroup"):
+    assert gnome_50_widget in gnome_blueprints
+assert "selectBatchFileRow" in add_download_blueprint and "selectBatchFileRow" in add_download_view
 
-linux_install = (ROOT / "resources/linux/install-native.sh").read_text(encoding="utf-8")
+linux_install = (ROOT / "resources/linux/install-flatpak-firefox-integration.sh").read_text(encoding="utf-8")
+linux_workflow = (ROOT / ".github/workflows/flatpak.yml").read_text(encoding="utf-8")
 mac_install = (ROOT / "resources/macos/install-firefox-integration.command").read_text(encoding="utf-8")
 for text in (linux_install, mac_install):
     assert "com.nickvision.parabolic" in text
     assert "parabolic-media-detector@othmanbenbrahim.dev" in text
 assert ".mozilla/native-messaging-hosts" in linux_install
-assert "systemd/user" in linux_install
-assert "dbus-1/services" in linux_install
+assert "flatpak run" in linux_install
+assert "gnome-50" in linux_workflow
+assert "linux-x64" in linux_workflow and "linux-arm64" in linux_workflow
 assert "Library/Application Support/Mozilla/NativeMessagingHosts" in mac_install
 assert "Library/LaunchAgents" in mac_install
 
-for workflow in (".github/workflows/linux-native.yml", ".github/workflows/macos.yml"):
+for workflow in (".github/workflows/flatpak.yml", ".github/workflows/macos.yml"):
     content = (ROOT / workflow).read_text(encoding="utf-8")
     assert "linux" in content.lower() or "macos" in content.lower()
     assert "N_m3u8DL-RE" in content
