@@ -36,8 +36,9 @@ assert 'OperatingSystem.IsLinux()' in coordinator and 'ProcessStartInfo("xdg-ope
 
 add_download_blueprint = (ROOT / "Nickvision.Parabolic.GNOME/Blueprints/AddDownloadDialog.blp").read_text(encoding="utf-8")
 add_download_view = (ROOT / "Nickvision.Parabolic.GNOME/Views/AddDownloadDialog.cs").read_text(encoding="utf-8-sig")
-assert "Adw.ButtonRow" not in add_download_blueprint
-assert "Adw.SpinnerPaintable" not in add_download_blueprint
+gnome_blueprints = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "Nickvision.Parabolic.GNOME/Blueprints").glob("*.blp"))
+for libadwaita_16_widget in ("Adw.ButtonRow", "Adw.Spinner", "Adw.SpinnerPaintable"):
+    assert libadwaita_16_widget not in gnome_blueprints
 assert "Adw.ActionRow" in add_download_blueprint
 assert "Gtk.Spinner" in add_download_blueprint
 assert "selectBatchFileButton" in add_download_blueprint and "selectBatchFileButton" in add_download_view

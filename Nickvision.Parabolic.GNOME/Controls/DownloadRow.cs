@@ -30,7 +30,7 @@ public class DownloadRow : Gtk.ListBoxRow
     [Gtk.Connect("statusLabel")]
     private Gtk.Label? _statusLabel;
     [Gtk.Connect("spinner")]
-    private Adw.Spinner? _spinner;
+    private Gtk.Spinner? _spinner;
     [Gtk.Connect("buttonsViewStack")]
     private Adw.ViewStack? _buttonsViewStack;
     [Gtk.Connect("pauseResumeButton")]
