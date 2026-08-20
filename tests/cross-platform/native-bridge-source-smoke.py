@@ -34,6 +34,14 @@ assert 'PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly' in service
 assert 'OperatingSystem.IsMacOS()' in coordinator and 'ProcessStartInfo("open")' in coordinator
 assert 'OperatingSystem.IsLinux()' in coordinator and 'ProcessStartInfo("xdg-open")' in coordinator
 
+add_download_blueprint = (ROOT / "Nickvision.Parabolic.GNOME/Blueprints/AddDownloadDialog.blp").read_text(encoding="utf-8")
+add_download_view = (ROOT / "Nickvision.Parabolic.GNOME/Views/AddDownloadDialog.cs").read_text(encoding="utf-8-sig")
+assert "Adw.ButtonRow" not in add_download_blueprint
+assert "Adw.SpinnerPaintable" not in add_download_blueprint
+assert "Adw.ActionRow" in add_download_blueprint
+assert "Gtk.Spinner" in add_download_blueprint
+assert "selectBatchFileButton" in add_download_blueprint and "selectBatchFileButton" in add_download_view
+
 linux_install = (ROOT / "resources/linux/install-native.sh").read_text(encoding="utf-8")
 mac_install = (ROOT / "resources/macos/install-firefox-integration.command").read_text(encoding="utf-8")
 for text in (linux_install, mac_install):
