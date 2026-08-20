@@ -102,8 +102,8 @@ public sealed class NativeMessagingServer : IDisposable
                 case "hello":
                     await SendSuccessAsync(request.RequestId, new HelloResponse
                     {
-                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.5",
-                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "direct-stream-fallback", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
+                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.6",
+                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "direct-stream-fallback", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control", "cross-platform-native-host"]
                     }, NativeJsonContext.Default.HelloResponse, cancellationToken);
                     break;
                 case "get-formats":

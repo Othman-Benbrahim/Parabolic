@@ -3,11 +3,11 @@
 # Features
 - **In-Player Download Button (Firefox)**: The primary download control appears automatically over the active video, so the toolbar popup is not required.
 - **One-Click Download Presets (Firefox)**: Download the best quality, cap video at 1080p/720p/480p, or extract audio from the page itself.
-- **Native Background Downloads (Firefox)**: The adapted Windows build starts downloads and returns progress through Native Messaging without switching away from Firefox.
+- **Native Background Downloads (Firefox)**: Adapted Windows, Linux Flatpak and macOS builds start downloads and return progress through Native Messaging without switching away from Firefox.
 - **Persistent Queue (Firefox)**: Accepted downloads continue after Firefox closes and recover from a dedicated SQLite queue after interruption.
 - **Priority Scheduling**: New browser downloads can use High, Normal or Low priority.
-- **Scheduled Downloads**: Queue a future start time that is persisted by the Windows service.
-- **Permalink-First Resolver Pipeline**: The real post/Reel/activity permalink is tried with yt-dlp first; a detected non-DRM HLS/DASH manifest is retried with bundled N_m3u8DL-RE, and a self-hosted Cobalt endpoint remains optional.
+- **Scheduled Downloads**: Queue a future start time that is persisted by the per-user background service.
+- **Permalink-First Resolver Pipeline**: The real page or Facebook post/Reel permalink is tried with yt-dlp first; a detected non-DRM HLS/DASH manifest is retried with bundled N_m3u8DL-RE, then a detected direct MP4/video response can be used as a final local fallback. A self-hosted Cobalt endpoint remains optional.
 - **Bandwidth Limit**: Apply a KiB/s limit to each new browser task.
 - **Temporary URL Renewal**: Resolve scheduled Cobalt links at start time and fall back to the stable page when a direct CDN link expires.
 - **Network/CDN Strategies**: Choose conservative, balanced, or aggressive fragment concurrency and retries.
@@ -24,3 +24,5 @@
 [![get-the-addon](resources/firefox.png)](https://addons.mozilla.org/en-US/firefox/addon/parabolic/)
 
 The enhanced detector is Firefox-only and documented in [`firefox/ARCHITECTURE.md`](firefox/ARCHITECTURE.md). It can be loaded temporarily from `about:debugging` by selecting `firefox/manifest.json`. The legacy Chromium source directory is not built or supported by this roadmap.
+
+Facebook recovery is validated in version 0.8.2. Some LinkedIn video players still expose no durable or usable media address and are a documented limitation for this release. The same Firefox package is used on Windows, Linux Flatpak and macOS; each platform supplies its bridge, with a separate host-side registration helper for Linux.

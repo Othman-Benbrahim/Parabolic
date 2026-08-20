@@ -9,8 +9,10 @@ using Nickvision.Parabolic.Shared.Services;
 using System;
 using System.Collections.Generic;
 using System.IO.Pipes;
+#if WINDOWS
 using System.Security.AccessControl;
 using System.Security.Principal;
+#endif
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -18,7 +20,9 @@ namespace Nickvision.Parabolic.DownloadService;
 
 internal static class Program
 {
-    private const string MutexName = "Local\\Nickvision.Parabolic.DownloadService";
+    private static string MutexName => OperatingSystem.IsWindows()
+        ? "Local\\Nickvision.Parabolic.DownloadService"
+        : "Nickvision.Parabolic.DownloadService";
 
     private static async Task<int> Main(string[] args)
     {
@@ -98,6 +102,7 @@ internal static class Program
 
     private static NamedPipeServerStream CreatePipeServer()
     {
+#if WINDOWS
         // PipeOptions.CurrentUserOnly also requires the client and server to
         // have the same Windows elevation level. Firefox normally launches
         // Native Messaging hosts without elevation, while an installer may
@@ -123,6 +128,17 @@ internal static class Program
             0,
             0,
             security);
+#else
+        // On Linux and macOS, .NET implements named pipes with Unix domain
+        // sockets. CurrentUserOnly rejects cross-user clients and keeps the
+        // Firefox relay scoped to the account that owns the service.
+        return new NamedPipeServerStream(
+            DaemonProtocol.PipeName,
+            PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+#endif
     }
 
     private static async Task HandleClientAsync(

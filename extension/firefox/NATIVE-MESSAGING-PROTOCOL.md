@@ -1,6 +1,6 @@
 # Parabolic Firefox Native Messaging Protocol
 
-This document is the implementation contract between Firefox add-on `0.8.x` and Parabolic `2026.8.5`. Protocol version `3` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe.
+This document is the implementation contract between Firefox add-on `0.8.x` and Parabolic `2026.8.6`. Protocol version `3` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe on Windows or Unix domain socket on Linux/macOS.
 
 ## Host registration
 
@@ -74,7 +74,7 @@ Request payload:
 ```json
 {
   "extensionId": "parabolic-media-detector@othmanbenbrahim.dev",
-  "extensionVersion": "0.8.1",
+  "extensionVersion": "0.8.2",
   "protocolVersion": 3
 }
 ```
@@ -83,7 +83,7 @@ Response payload:
 
 ```json
 {
-  "appVersion": "2026.8.5",
+  "appVersion": "2026.8.6",
   "protocolVersion": 3,
   "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "direct-stream-fallback", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
 }

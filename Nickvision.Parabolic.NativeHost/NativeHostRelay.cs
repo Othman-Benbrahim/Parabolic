@@ -66,14 +66,23 @@ internal static class NativeHostRelay
         if (!File.Exists(executablePath))
         {
             throw new FileNotFoundException(
-                "The Parabolic download service is missing. Reinstall Parabolic with the Windows installer.",
+                "The Parabolic download service is missing. Reinstall the native Parabolic package for this operating system.",
                 executablePath);
         }
-        Process.Start(new ProcessStartInfo(executablePath, "--background")
+        var startInfo = new ProcessStartInfo(executablePath, "--background")
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = AppContext.BaseDirectory
-        });
+        };
+        if (OperatingSystem.IsMacOS())
+        {
+            var appToolsDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "MacOS"));
+            var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            startInfo.Environment["PATH"] = string.IsNullOrEmpty(currentPath)
+                ? appToolsDirectory
+                : $"{appToolsDirectory}{Path.PathSeparator}{currentPath}";
+        }
+        Process.Start(startInfo);
     }
 }

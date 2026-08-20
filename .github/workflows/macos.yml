@@ -12,34 +12,52 @@ permissions:
 env:
   PROJECT_NAME: Nickvision.Parabolic.GNOME
   APP_NAME: Parabolic
+  YTDLP_VERSION: 2026.07.04
+  NM3U8DL_VERSION: v0.6.0-beta
 jobs:
   gnome-macos:
     name: "GNOME on macOS"
     if: ${{ github.event.pull_request.user.login != 'weblate' }}
     strategy:
+      fail-fast: false
       matrix:
         variant:
           - arch: arm64
             runner: macos-latest
             runtime: osx-arm64
+            nm3u8dl: osx-arm64
           - arch: x64
             runner: macos-15-intel
             runtime: osx-x64
+            nm3u8dl: osx-x64
     runs-on: ${{ matrix.variant.runner }}
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: "Setup Environment"
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          brew install gtk4 libadwaita blueprint-compiler gettext glib aria2 ffmpeg deno
-          curl -L "https://github.com/yt-dlp/yt-dlp/releases/download/2026.03.17/yt-dlp_macos" -o "${{ github.workspace }}/resources/macos/yt-dlp"
-          chmod +x "${{ github.workspace }}/resources/macos/yt-dlp"
+          brew install gtk4 libadwaita blueprint-compiler gettext glib aria2 ffmpeg deno jq
+          curl --fail --location "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_macos" -o "${{ github.workspace }}/resources/macos/yt-dlp"
+          asset_url="$(curl --fail --silent --show-error --location --header "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/nilaoda/N_m3u8DL-RE/releases/tags/${NM3U8DL_VERSION}" | jq -r '.assets[] | select(.name | contains("${{ matrix.variant.nm3u8dl }}")) | .browser_download_url' | head -n1)"
+          test -n "$asset_url"
+          mkdir -p /tmp/parabolic-nm3u8dl
+          curl --fail --location "$asset_url" -o /tmp/parabolic-nm3u8dl/archive
+          tar -xzf /tmp/parabolic-nm3u8dl/archive -C /tmp/parabolic-nm3u8dl
+          find /tmp/parabolic-nm3u8dl -type f -name 'N_m3u8DL-RE' -exec cp {} "${{ github.workspace }}/resources/macos/N_m3u8DL-RE" \;
+          chmod +x "${{ github.workspace }}/resources/macos/yt-dlp" "${{ github.workspace }}/resources/macos/N_m3u8DL-RE"
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
       - name: "Restore"
-        run: dotnet restore ${{ env.PROJECT_NAME }} --runtime ${{ matrix.variant.runtime }} /p:PublishReadyToRun=true
+        run: |
+          dotnet restore ${{ env.PROJECT_NAME }} --runtime ${{ matrix.variant.runtime }} /p:PublishReadyToRun=true
+          dotnet restore Nickvision.Parabolic.NativeHost --runtime ${{ matrix.variant.runtime }}
+          dotnet restore Nickvision.Parabolic.DownloadService --runtime ${{ matrix.variant.runtime }}
+      - name: "Validate Cross-platform Bridge Sources"
+        run: python3 tests/cross-platform/native-bridge-source-smoke.py
       - name: "Package"
         working-directory: ${{ github.workspace }}
         run: |
@@ -47,5 +65,6 @@ jobs:
           ./resources/macos/publish-and-package.sh ${{ matrix.variant.runtime }}
       - uses: actions/upload-artifact@v4
         with:
-          path: ${{ github.workspace }}/resources/macos/*.app
-          name: ${{ env.APP_NAME }}-${{ matrix.variant.arch }}
+          path: ${{ github.workspace }}/dist/Parabolic-2026.8.6-macos-${{ matrix.variant.arch }}.zip
+          name: ${{ env.APP_NAME }}-2026.8.6-macos-${{ matrix.variant.arch }}
+          if-no-files-found: error

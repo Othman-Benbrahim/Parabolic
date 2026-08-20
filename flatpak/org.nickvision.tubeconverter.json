@@ -22,16 +22,10 @@
         "--talk-name=org.freedesktop.ScreenSaver",
         "--talk-name=org.freedesktop.secrets",
         "--filesystem=xdg-download",
-        "--filesystem=~/.config/BraveSoftware/Brave-Browser:ro",
-        "--filesystem=~/.config/google-chrome:ro",
-        "--filesystem=~/.config/chromium:ro",
-        "--filesystem=~/.config/microsoft-edge:ro",
+        "--filesystem=xdg-run/parabolic-pipes:create",
         "--filesystem=~/.mozilla/firefox:ro",
         "--filesystem=~/.config/mozilla/firefox:ro",
-        "--filesystem=~/snap/firefox/common/.mozilla/firefox:ro",
-        "--filesystem=~/.config/opera:ro",
-        "--filesystem=~/.config/vivaldi:ro",
-        "--filesystem=~/.config/naver-whale:ro"
+        "--filesystem=~/snap/firefox/common/.mozilla/firefox:ro"
     ],
     "cleanup":[
         "/include",
@@ -108,6 +102,19 @@
                         "aarch64"
                     ]
                 }   
+            ]
+        },
+        {
+            "name": "n-m3u8dl-re",
+            "buildsystem": "simple",
+            "build-commands": [
+                "install -Dm755 N_m3u8DL-RE /app/bin/N_m3u8DL-RE"
+            ],
+            "sources": [
+                {
+                    "type": "file",
+                    "path": "generated/N_m3u8DL-RE"
+                }
             ]
         },
         {

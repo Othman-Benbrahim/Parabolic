@@ -36,8 +36,21 @@ info "Loading variables..."
 APP_ID="org.nickvision.tubeconverter"
 APP_NAME="Parabolic"
 PROJECT="Nickvision.Parabolic.GNOME"
+NATIVE_HOST_PROJECT="Nickvision.Parabolic.NativeHost"
+DOWNLOAD_SERVICE_PROJECT="Nickvision.Parabolic.DownloadService"
+VERSION="2026.8.6"
 RUNTIME="$1"
 APP_BUNDLE="${APP_NAME}.app"
+case "$RUNTIME" in
+    osx-x64) ARCH="x64" ;;
+    osx-arm64) ARCH="arm64" ;;
+    *) error "Unsupported runtime: $RUNTIME" ;;
+esac
+BUILD_ROOT="$SCRIPT_DIR/build-$ARCH"
+PUBLISH_DIR="$BUILD_ROOT/app"
+HOST_PUBLISH_DIR="$BUILD_ROOT/native-host"
+SERVICE_PUBLISH_DIR="$BUILD_ROOT/download-service"
+BRIDGE_DIR="$APP_BUNDLE/Contents/Library/ParabolicBridge"
 info "Runtime: $RUNTIME"
 info "App bundle: $APP_BUNDLE"
 success "Loaded variables."
@@ -49,26 +62,34 @@ echo -e "${BOLD}${BLUE}=========================================================
 # Publish application
 info "Publishing application..."
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
+rm -rf "$BUILD_ROOT" "$APP_BUNDLE"
+mkdir -p "$PUBLISH_DIR" "$HOST_PUBLISH_DIR" "$SERVICE_PUBLISH_DIR"
 dotnet publish -c Release \
     "../../$PROJECT/$PROJECT.csproj" \
-    --runtime $RUNTIME \
+    --runtime "$RUNTIME" \
     --self-contained true \
-    -p:PublishReadyToRun=true
-PUBLISH_DIR="$(find "../../$PROJECT/bin/Release" -type d -name publish | head -n1)"
-if [[ ! -d "$PUBLISH_DIR" ]]; then
-    error "Publish directory not found!"
-fi
-success "Published application."
+    -p:PublishReadyToRun=true \
+    -o "$PUBLISH_DIR"
+dotnet publish -c Release \
+    "../../$NATIVE_HOST_PROJECT/$NATIVE_HOST_PROJECT.csproj" \
+    --runtime "$RUNTIME" --self-contained true -o "$HOST_PUBLISH_DIR"
+dotnet publish -c Release \
+    "../../$DOWNLOAD_SERVICE_PROJECT/$DOWNLOAD_SERVICE_PROJECT.csproj" \
+    --runtime "$RUNTIME" --self-contained true -o "$SERVICE_PUBLISH_DIR"
+success "Published application, Firefox bridge and persistent service."
 
 # Create app bundle structure
 info "Creating app bundle structure..."
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
+mkdir -p "$BRIDGE_DIR"
 success "Created app bundle structure."
 
 # Copy published files to app bundle
 info "Copying published files to app bundle..."
 cp -R "$PUBLISH_DIR/"* "$APP_BUNDLE/Contents/MacOS/"
+cp -R "$HOST_PUBLISH_DIR/"* "$BRIDGE_DIR/"
+cp -R "$SERVICE_PUBLISH_DIR/"* "$BRIDGE_DIR/"
 success "Copied published files to app bundle."
 cp "Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 sed -i '' "s|@APP_ID@|$APP_ID|g" "$APP_BUNDLE/Contents/Info.plist"
@@ -106,12 +127,24 @@ FFMPEG_PATH="$BREW_PREFIX/bin/ffmpeg"
 FFPROBE_PATH="$BREW_PREFIX/bin/ffprobe"
 FFPLAY_PATH="$BREW_PREFIX/bin/ffplay"
 DENO_PATH="$BREW_PREFIX/bin/deno"
+NM3U8DL_PATH="./N_m3u8DL-RE"
 if [[ -f "$YT_DLP_PATH" ]]; then
     cp "$YT_DLP_PATH" "$APP_BUNDLE/Contents/MacOS/yt-dlp"
+    cp "$YT_DLP_PATH" "$BRIDGE_DIR/yt-dlp"
     chmod +x "$APP_BUNDLE/Contents/MacOS/yt-dlp"
+    chmod +x "$BRIDGE_DIR/yt-dlp"
     success "Bundled yt-dlp."
 else
     warn "yt-dlp not found at $YT_DLP_PATH"
+fi
+if [[ -f "$NM3U8DL_PATH" ]]; then
+    cp "$NM3U8DL_PATH" "$APP_BUNDLE/Contents/MacOS/N_m3u8DL-RE"
+    cp "$NM3U8DL_PATH" "$BRIDGE_DIR/N_m3u8DL-RE"
+    chmod +x "$APP_BUNDLE/Contents/MacOS/N_m3u8DL-RE" "$BRIDGE_DIR/N_m3u8DL-RE"
+    cp "../licenses/N_m3u8DL-RE-LICENSE.txt" "$APP_BUNDLE/Contents/Resources/N_m3u8DL-RE-LICENSE.txt"
+    success "Bundled N_m3u8DL-RE."
+else
+    error "N_m3u8DL-RE not found at $NM3U8DL_PATH"
 fi
 if [[ -f "$ARIA2C_PATH" ]]; then
     cp "$ARIA2C_PATH" "$APP_BUNDLE/Contents/MacOS/aria2c"
@@ -358,8 +391,30 @@ for TOOL in ffmpeg ffprobe ffplay aria2c deno; do
         codesign --force --sign - "$APP_BUNDLE/Contents/MacOS/$TOOL" 2>/dev/null || true
     fi
 done
+for TOOL in "$NATIVE_HOST_PROJECT" "$DOWNLOAD_SERVICE_PROJECT" yt-dlp N_m3u8DL-RE; do
+    if [[ -f "$BRIDGE_DIR/$TOOL" ]]; then
+        chmod +x "$BRIDGE_DIR/$TOOL"
+        codesign --force --sign - "$BRIDGE_DIR/$TOOL" 2>/dev/null || true
+    fi
+done
 codesign --force --sign - "$APP_BUNDLE/Contents/MacOS/$REAL_BINARY"
+codesign --force --deep --sign - "$APP_BUNDLE"
 success "Ad-hoc signed bundled libraries and executables."
+
+# Create a distributable ZIP. The user first moves Parabolic.app to
+# /Applications, then runs the integration command to register Firefox and the
+# per-user LaunchAgent without administrator privileges.
+PACKAGE_ROOT="$BUILD_ROOT/Parabolic-$VERSION-macos-$ARCH"
+mkdir -p "$PACKAGE_ROOT"
+cp -R "$APP_BUNDLE" "$PACKAGE_ROOT/Parabolic.app"
+cp "install-firefox-integration.command" "$PACKAGE_ROOT/Install Firefox integration.command"
+cp "uninstall-firefox-integration.command" "$PACKAGE_ROOT/Uninstall Firefox integration.command"
+chmod +x "$PACKAGE_ROOT/"*.command
+mkdir -p "$CURRENT_PWD/dist"
+ZIP_PATH="$CURRENT_PWD/dist/Parabolic-$VERSION-macos-$ARCH.zip"
+rm -f "$ZIP_PATH"
+ditto -c -k --sequesterRsrc --keepParent "$PACKAGE_ROOT" "$ZIP_PATH"
+success "Created $ZIP_PATH."
 
 # Restore pwd
 info "Restoring previous working directory..."

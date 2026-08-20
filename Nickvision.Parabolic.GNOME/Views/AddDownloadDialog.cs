@@ -175,7 +175,7 @@ public class AddDownloadDialog : Adw.Dialog
         // Events
         OnClosed += Dialog_OnClosed;
         _urlRow!.OnChanged += UrlRow_OnChanged;
-        _selectBatchFileRow!.OnActivated += SelectBathFileRow_OnActivated;
+        _selectBatchFileRow!.OnActivated += SelectBatchFileRow_OnActivated;
         _authenticationCredentialRow!.OnNotify += AuthenticationCredentialRow_OnNotify;
         _downloadImmediatelyAsVideoRow!.OnNotify += DownloadImmediatelyAsVideoRow_OnNotify;
         _downloadImmediatelyAsAudioRow!.OnNotify += DownloadImmediatelyAsAudioRow_OnNotify;
@@ -278,7 +278,7 @@ public class AddDownloadDialog : Adw.Dialog
 
     private void UrlRow_OnChanged(Gtk.Editable sender, EventArgs e) => _discoverUrlButton!.Sensitive = !(_urlRow!.Text_?.StartsWith("//") ?? false) && Uri.TryCreate(_urlRow!.Text_, UriKind.Absolute, out var _);
 
-    private async void SelectBathFileRow_OnActivated(Adw.ButtonRow sender, EventArgs e)
+    private async void SelectBatchFileRow_OnActivated(Adw.ButtonRow sender, EventArgs e)
     {
         var fileDialog = Gtk.FileDialog.New();
         fileDialog.Title = _translationService._("Select Batch File");
