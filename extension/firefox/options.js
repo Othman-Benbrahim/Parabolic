@@ -14,6 +14,9 @@ const DEFAULT_SETTINGS = {
   authenticationMode: "parabolic",
   proxyMode: "parabolic",
   sendPageReferer: false,
+  maxTaskAttempts: 3,
+  computeSha256: false,
+  watchClipboardInPopup: false,
   overlayPosition: "top-right",
   fallbackToProtocol: false
 };
@@ -34,6 +37,13 @@ async function saveSetting(event) {
   let value = element.type === "checkbox" ? element.checked : element.value;
   if (element.type === "number") {
     value = Number.parseInt(element.value, 10) || 0;
+  }
+  if (element.id === "watchClipboardInPopup" && value === true) {
+    const granted = await browser.permissions.request({ permissions: ["clipboardRead"] });
+    if (!granted) {
+      element.checked = false;
+      value = false;
+    }
   }
   if (element.id === "cobaltAuthToken") {
     await browser.storage.local.set({ cobaltAuthToken: value });

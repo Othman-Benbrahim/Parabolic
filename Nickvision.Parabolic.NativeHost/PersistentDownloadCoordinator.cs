@@ -12,23 +12,29 @@ using System.Threading.Tasks;
 
 namespace Nickvision.Parabolic.NativeHost;
 
-public sealed class PersistentDownloadCoordinator : IDisposable
+internal sealed class PersistentDownloadCoordinator : IDisposable
 {
     private readonly IDownloadService _downloadService;
+    private readonly IPostDownloadPipeline _postDownloadPipeline;
     private readonly object _sync;
     private readonly Dictionary<int, PersistentDownloadSession> _byInternalId;
     private readonly Dictionary<string, PersistentDownloadSession> _byExternalId;
     private readonly SemaphoreSlim _mutationLock;
+    private readonly CancellationTokenSource _lifetime;
 
     public event Action<DownloadEventPayload>? EventProduced;
 
-    public PersistentDownloadCoordinator(IDownloadService downloadService)
+    public PersistentDownloadCoordinator(
+        IDownloadService downloadService,
+        IPostDownloadPipeline postDownloadPipeline)
     {
         _downloadService = downloadService;
+        _postDownloadPipeline = postDownloadPipeline;
         _sync = new object();
         _byInternalId = new Dictionary<int, PersistentDownloadSession>();
         _byExternalId = new Dictionary<string, PersistentDownloadSession>(StringComparer.Ordinal);
         _mutationLock = new SemaphoreSlim(1, 1);
+        _lifetime = new CancellationTokenSource();
         _downloadService.DownloadAdded += DownloadService_DownloadAdded;
         _downloadService.DownloadCompleted += DownloadService_DownloadCompleted;
         _downloadService.DownloadProgressChanged += DownloadService_DownloadProgressChanged;
@@ -75,11 +81,16 @@ public sealed class PersistentDownloadCoordinator : IDisposable
                     Path.Combine(options.SaveFolder, $"{options.SaveFilename}{options.FileType.DotExtension}"),
                     options.Priority,
                     options.ScheduledAt.HasValue && options.ScheduledAt.Value > DateTimeOffset.UtcNow
-                        ? "scheduled"
-                        : "queued",
+                        ? DownloadTaskState.Scheduled
+                        : DownloadTaskState.Queued,
                     options.ResolverName,
                     options.ScheduledAt,
-                    options.SpeedLimitKbps);
+                    options.SpeedLimitKbps,
+                    options.TaskAttempt,
+                    options.MaxTaskAttempts,
+                    options.GroupKey,
+                    options.CollectionId,
+                    options.PostProcessingSteps);
                 _byInternalId[internalId] = session;
                 _byExternalId[externalId] = session;
                 return session.ToSnapshot();
@@ -96,7 +107,7 @@ public sealed class PersistentDownloadCoordinator : IDisposable
         lock (_sync)
         {
             return _byExternalId.Values
-                .Where(session => !IsTerminal(session.Status))
+                .Where(session => !DownloadTaskStateMachine.IsTerminal(session.State))
                 .OrderByDescending(session => session.Priority)
                 .ThenBy(session => session.InternalId)
                 .Select(session => session.ToSnapshot())
@@ -107,6 +118,22 @@ public sealed class PersistentDownloadCoordinator : IDisposable
     public async Task CancelAsync(string externalId, CancellationToken cancellationToken)
     {
         var session = GetSession(externalId);
+        var cancelledRetry = false;
+        lock (_sync)
+        {
+            if (session.State == DownloadTaskState.RetryScheduled)
+            {
+                session.RetryCancellation?.Cancel();
+                session.State = DownloadTaskState.Cancelled;
+                session.NextRetryAt = null;
+                cancelledRetry = true;
+            }
+        }
+        if (cancelledRetry)
+        {
+            Publish(session);
+            return;
+        }
         await _mutationLock.WaitAsync(cancellationToken);
         try
         {
@@ -128,7 +155,7 @@ public sealed class PersistentDownloadCoordinator : IDisposable
         {
             throw new NativeRequestException("DOWNLOAD_NOT_RUNNING", "The requested download cannot be paused.");
         }
-        UpdateAndPublish(session, "paused");
+        TransitionAndPublish(session, DownloadTaskState.Paused);
     }
 
     public void Resume(string externalId)
@@ -138,7 +165,7 @@ public sealed class PersistentDownloadCoordinator : IDisposable
         {
             throw new NativeRequestException("DOWNLOAD_NOT_PAUSED", "The requested download is not paused.");
         }
-        UpdateAndPublish(session, "downloading");
+        TransitionAndPublish(session, DownloadTaskState.Running);
     }
 
     public async Task SetPriorityAsync(
@@ -163,7 +190,7 @@ public sealed class PersistentDownloadCoordinator : IDisposable
         {
             _mutationLock.Release();
         }
-        Publish(session, session.Status);
+        Publish(session);
     }
 
     public void OpenFolder(string externalId)
@@ -210,12 +237,14 @@ public sealed class PersistentDownloadCoordinator : IDisposable
 
     public void Dispose()
     {
+        _lifetime.Cancel();
         _downloadService.DownloadAdded -= DownloadService_DownloadAdded;
         _downloadService.DownloadCompleted -= DownloadService_DownloadCompleted;
         _downloadService.DownloadProgressChanged -= DownloadService_DownloadProgressChanged;
         _downloadService.DownloadStartedFromQueue -= DownloadService_DownloadStartedFromQueue;
         _downloadService.DownloadStopped -= DownloadService_DownloadStopped;
         _mutationLock.Dispose();
+        _lifetime.Dispose();
     }
 
     private PersistentDownloadSession GetSession(string externalId)
@@ -249,24 +278,34 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             eventArgs.Path,
             options.Priority,
             options.ScheduledAt.HasValue && options.ScheduledAt.Value > DateTimeOffset.UtcNow
-                ? "scheduled"
-                : eventArgs.Status == DownloadStatus.Queued ? "queued" : "downloading",
+                ? DownloadTaskState.Scheduled
+                : eventArgs.Status == DownloadStatus.Queued ? DownloadTaskState.Queued : DownloadTaskState.Running,
             options.ResolverName,
             options.ScheduledAt,
-            options.SpeedLimitKbps);
+            options.SpeedLimitKbps,
+            options.TaskAttempt,
+            options.MaxTaskAttempts,
+            options.GroupKey,
+            options.CollectionId,
+            options.PostProcessingSteps);
         lock (_sync)
         {
+            if (_byExternalId.TryGetValue(session.ExternalId, out var previous))
+            {
+                previous.RetryCancellation?.Dispose();
+                _byInternalId.Remove(previous.InternalId);
+            }
             _byInternalId[eventArgs.Id] = session;
             _byExternalId[session.ExternalId] = session;
         }
-        Publish(session, session.Status);
+        Publish(session);
     }
 
     private void DownloadService_DownloadStartedFromQueue(object? sender, DownloadEventArgs eventArgs)
     {
         if (TryGetSession(eventArgs.Id, out var session))
         {
-            UpdateAndPublish(session, "downloading");
+            TransitionAndPublish(session, DownloadTaskState.Running);
         }
     }
 
@@ -277,19 +316,22 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             return;
         }
         var log = eventArgs.LogChunk.ToString();
-        var status = log.Contains("ERROR:", StringComparison.OrdinalIgnoreCase)
-            ? "failed"
-            : log.Contains("Merger", StringComparison.OrdinalIgnoreCase)
-                || log.Contains("Merging", StringComparison.OrdinalIgnoreCase)
-                ? "merging"
-                : session.Status == "paused" ? "paused" : "downloading";
+        var state = log.Contains("Merger", StringComparison.OrdinalIgnoreCase)
+            || log.Contains("Merging", StringComparison.OrdinalIgnoreCase)
+                ? DownloadTaskState.Processing
+                : session.State == DownloadTaskState.Paused
+                    ? DownloadTaskState.Paused
+                    : DownloadTaskState.Running;
         lock (_sync)
         {
             if (log.Contains("N_m3u8DL-RE", StringComparison.OrdinalIgnoreCase))
             {
                 session.Resolver = "n-m3u8dl-re";
             }
-            session.Status = status;
+            if (DownloadTaskStateMachine.CanTransition(session.State, state))
+            {
+                session.State = state;
+            }
             session.Progress = double.IsFinite(eventArgs.Progress) && eventArgs.Progress >= 0
                 ? Math.Clamp(eventArgs.Progress * 100.0, 0.0, 100.0)
                 : session.Progress;
@@ -297,32 +339,99 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             session.Eta = eventArgs.Eta >= 0 ? eventArgs.Eta : null;
             session.Message = GetProgressMessage(eventArgs.LogChunk);
         }
-        Publish(session, status);
+        Publish(session);
     }
 
-    private void DownloadService_DownloadCompleted(object? sender, DownloadCompletedEventArgs eventArgs)
+    private async void DownloadService_DownloadCompleted(object? sender, DownloadCompletedEventArgs eventArgs)
     {
         if (!TryGetSession(eventArgs.Id, out var session))
         {
             return;
         }
-        lock (_sync)
+        try
         {
-            session.Path = eventArgs.Path;
-            session.Status = eventArgs.Status == DownloadStatus.Success ? "completed" : "failed";
-            session.Progress = eventArgs.Status == DownloadStatus.Success ? 100.0 : session.Progress;
-            session.Message = eventArgs.Status == DownloadStatus.Success
-                ? null
-                : GetDownloadFailureMessage(eventArgs.Log);
+            lock (_sync)
+            {
+                session.Path = eventArgs.Path;
+            }
+            if (eventArgs.Status == DownloadStatus.Success)
+            {
+                TransitionAndPublish(session, DownloadTaskState.Processing);
+                var result = await _postDownloadPipeline.ExecuteAsync(
+                    session.Path,
+                    session.PostProcessingSteps,
+                    step =>
+                    {
+                        lock (_sync)
+                        {
+                            session.ProcessingStep = step;
+                        }
+                        Publish(session);
+                    },
+                    _lifetime.Token);
+                lock (_sync)
+                {
+                    session.Progress = 100.0;
+                    session.Message = null;
+                    session.ProcessingStep = null;
+                    session.Sha256 = result.Sha256;
+                }
+                TransitionAndPublish(session, DownloadTaskState.Completed);
+                return;
+            }
+
+            var message = GetDownloadFailureMessage(eventArgs.Log);
+            var failure = DownloadErrorClassifier.Classify(message);
+            lock (_sync)
+            {
+                session.Message = message;
+                session.Failure = failure;
+            }
+            if (failure.Retryable && session.Attempt < session.MaxAttempts)
+            {
+                var delay = TimeSpan.FromSeconds(Math.Min(60, Math.Pow(2, session.Attempt) * 2));
+                lock (_sync)
+                {
+                    session.NextRetryAt = DateTimeOffset.UtcNow.Add(delay);
+                    session.RetryCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+                }
+                TransitionAndPublish(session, DownloadTaskState.RetryScheduled);
+                await Task.Delay(delay, session.RetryCancellation.Token);
+                if (!await _downloadService.RetryAsync(session.InternalId))
+                {
+                    lock (_sync)
+                    {
+                        session.NextRetryAt = null;
+                    }
+                    TransitionAndPublish(session, DownloadTaskState.Failed);
+                }
+                return;
+            }
+            TransitionAndPublish(session, DownloadTaskState.Failed);
         }
-        Publish(session, session.Status);
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested || session.State == DownloadTaskState.Cancelled)
+        {
+        }
+        catch (Exception exception)
+        {
+            lock (_sync)
+            {
+                session.Message = exception.Message;
+                session.ProcessingStep = null;
+                session.Failure = new DownloadFailureInfo(
+                    DownloadErrorCategory.PostProcessing,
+                    false,
+                    "Review the completed file and the post-processing settings.");
+            }
+            TransitionAndPublish(session, DownloadTaskState.Failed);
+        }
     }
 
     private void DownloadService_DownloadStopped(object? sender, DownloadEventArgs eventArgs)
     {
         if (TryGetSession(eventArgs.Id, out var session))
         {
-            UpdateAndPublish(session, "cancelled");
+            TransitionAndPublish(session, DownloadTaskState.Cancelled);
         }
     }
 
@@ -334,16 +443,20 @@ public sealed class PersistentDownloadCoordinator : IDisposable
         }
     }
 
-    private void UpdateAndPublish(PersistentDownloadSession session, string status)
+    private void TransitionAndPublish(PersistentDownloadSession session, DownloadTaskState state)
     {
         lock (_sync)
         {
-            session.Status = status;
+            if (!DownloadTaskStateMachine.CanTransition(session.State, state))
+            {
+                return;
+            }
+            session.State = state;
         }
-        Publish(session, status);
+        Publish(session);
     }
 
-    private void Publish(PersistentDownloadSession session, string status)
+    private void Publish(PersistentDownloadSession session)
     {
         DownloadEventPayload payload;
         lock (_sync)
@@ -352,7 +465,7 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             {
                 DownloadId = session.ExternalId,
                 TabId = session.TabId,
-                Status = status,
+                Status = DownloadTaskStateMachine.ToProtocolValue(session.State),
                 Progress = session.Progress,
                 Speed = session.Speed,
                 Eta = session.Eta,
@@ -361,14 +474,21 @@ public sealed class PersistentDownloadCoordinator : IDisposable
                 Priority = session.Priority.ToString().ToLowerInvariant(),
                 Resolver = session.Resolver,
                 ScheduledAt = session.ScheduledAt?.ToString("O"),
-                SpeedLimitKbps = session.SpeedLimitKbps
+                SpeedLimitKbps = session.SpeedLimitKbps,
+                ErrorCategory = session.Failure?.Category.ToString().ToLowerInvariant(),
+                Retryable = session.Failure?.Retryable,
+                ActionHint = session.Failure?.ActionHint,
+                Attempt = session.Attempt,
+                MaxAttempts = session.MaxAttempts,
+                NextRetryAt = session.NextRetryAt?.ToString("O"),
+                GroupKey = string.IsNullOrWhiteSpace(session.GroupKey) ? null : session.GroupKey,
+                CollectionId = string.IsNullOrWhiteSpace(session.CollectionId) ? null : session.CollectionId,
+                ProcessingStep = session.ProcessingStep,
+                Sha256 = session.Sha256
             };
         }
         EventProduced?.Invoke(payload);
     }
-
-    private static bool IsTerminal(string status) =>
-        status is "completed" or "failed" or "cancelled";
 
     private static string GetDownloadFailureMessage(ReadOnlyMemory<char> log)
     {
@@ -403,7 +523,7 @@ public sealed class PersistentDownloadCoordinator : IDisposable
         public Uri Url { get; }
         public string Path { get; set; }
         public DownloadPriority Priority { get; set; }
-        public string Status { get; set; }
+        public DownloadTaskState State { get; set; }
         public double? Progress { get; set; }
         public string? Speed { get; set; }
         public int? Eta { get; set; }
@@ -411,6 +531,16 @@ public sealed class PersistentDownloadCoordinator : IDisposable
         public string Resolver { get; set; }
         public DateTimeOffset? ScheduledAt { get; }
         public int? SpeedLimitKbps { get; }
+        public int Attempt { get; }
+        public int MaxAttempts { get; }
+        public string GroupKey { get; }
+        public string CollectionId { get; }
+        public IReadOnlyList<string> PostProcessingSteps { get; }
+        public DownloadFailureInfo? Failure { get; set; }
+        public DateTimeOffset? NextRetryAt { get; set; }
+        public string? ProcessingStep { get; set; }
+        public string? Sha256 { get; set; }
+        public CancellationTokenSource? RetryCancellation { get; set; }
 
         public PersistentDownloadSession(
             int internalId,
@@ -419,10 +549,15 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             Uri url,
             string path,
             DownloadPriority priority,
-            string status,
+            DownloadTaskState state,
             string resolver,
             DateTimeOffset? scheduledAt,
-            int? speedLimitKbps)
+            int? speedLimitKbps,
+            int attempt,
+            int maxAttempts,
+            string groupKey,
+            string collectionId,
+            IReadOnlyList<string> postProcessingSteps)
         {
             InternalId = internalId;
             ExternalId = externalId;
@@ -430,10 +565,15 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             Url = url;
             Path = path;
             Priority = priority;
-            Status = status;
+            State = state;
             Resolver = string.IsNullOrWhiteSpace(resolver) ? "yt-dlp" : resolver;
             ScheduledAt = scheduledAt;
             SpeedLimitKbps = speedLimitKbps;
+            Attempt = Math.Max(1, attempt);
+            MaxAttempts = Math.Clamp(maxAttempts, 1, 10);
+            GroupKey = groupKey ?? string.Empty;
+            CollectionId = collectionId ?? string.Empty;
+            PostProcessingSteps = postProcessingSteps ?? ["verify-output"];
         }
 
         public DownloadSnapshot ToSnapshot() => new()
@@ -442,7 +582,7 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             TabId = TabId,
             Url = Url.ToString(),
             Filename = string.IsNullOrWhiteSpace(Path) ? string.Empty : System.IO.Path.GetFileName(Path),
-            Status = Status,
+            Status = DownloadTaskStateMachine.ToProtocolValue(State),
             Priority = Priority.ToString().ToLowerInvariant(),
             Progress = Progress,
             Speed = Speed,
@@ -450,7 +590,17 @@ public sealed class PersistentDownloadCoordinator : IDisposable
             Message = Message,
             Resolver = Resolver,
             ScheduledAt = ScheduledAt?.ToString("O"),
-            SpeedLimitKbps = SpeedLimitKbps
+            SpeedLimitKbps = SpeedLimitKbps,
+            ErrorCategory = Failure?.Category.ToString().ToLowerInvariant(),
+            Retryable = Failure?.Retryable,
+            ActionHint = Failure?.ActionHint,
+            Attempt = Attempt,
+            MaxAttempts = MaxAttempts,
+            NextRetryAt = NextRetryAt?.ToString("O"),
+            GroupKey = string.IsNullOrWhiteSpace(GroupKey) ? null : GroupKey,
+            CollectionId = string.IsNullOrWhiteSpace(CollectionId) ? null : CollectionId,
+            ProcessingStep = ProcessingStep,
+            Sha256 = Sha256
         };
     }
 }

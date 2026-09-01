@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 manifest = json.loads((ROOT / "extension/firefox/manifest.json").read_text(encoding="utf-8"))
 assert manifest["manifest_version"] == 3
-assert manifest["version"] == "0.8.2"
+assert manifest["version"] == "0.9.0"
 
 ET.parse(ROOT / "Nickvision.Parabolic.DownloadService/Nickvision.Parabolic.DownloadService.csproj")
 ET.parse(ROOT / "Nickvision.Parabolic.NativeHost/Nickvision.Parabolic.NativeHost.csproj")

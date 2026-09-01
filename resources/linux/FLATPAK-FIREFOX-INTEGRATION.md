@@ -6,11 +6,11 @@ to start the sandboxed command.
 
 ## Install
 
-1. Install the architecture-matched `Parabolic-2026.8.6-*.flatpak` bundle.
+1. Install the architecture-matched `Parabolic-2026.9.0-*.flatpak` bundle.
 2. Extract this integration archive.
 3. Run `chmod +x install-flatpak-firefox-integration.sh`.
 4. Run `./install-flatpak-firefox-integration.sh`.
-5. Restart Firefox and install or update the Parabolic Firefox add-on 0.8.2.
+5. Restart Firefox and install or update the Parabolic Firefox add-on 0.9.0.
 
 The installer writes only below `~/.local/lib/parabolic-flatpak` and
 `~/.mozilla/native-messaging-hosts`.

@@ -14,6 +14,9 @@ const DEFAULT_SETTINGS = {
   authenticationMode: "parabolic",
   proxyMode: "parabolic",
   sendPageReferer: false,
+  maxTaskAttempts: 3,
+  computeSha256: false,
+  watchClipboardInPopup: false,
   overlayPosition: "top-right",
   fallbackToProtocol: false
 };
@@ -652,7 +655,13 @@ function normalizedDownloadPayload(message, sender) {
     proxyMode: PROXY_MODES.has(settings.proxyMode)
       ? settings.proxyMode
       : "parabolic",
-    sendPageReferer: settings.sendPageReferer === true
+    sendPageReferer: settings.sendPageReferer === true,
+    maxTaskAttempts: Math.min(10, Math.max(1, Number.parseInt(settings.maxTaskAttempts, 10) || 3)),
+    postProcessingSteps: settings.computeSha256 === true
+      ? ["verify-output", "sha256"]
+      : ["verify-output"],
+    groupKey: String(source.groupKey || "").slice(0, 100),
+    collectionId: String(source.collectionId || "").slice(0, 100)
   };
 }
 
@@ -764,11 +773,21 @@ async function createContextMenu() {
   } catch (_) {
     // The item does not exist yet.
   }
+  try {
+    await browser.contextMenus.remove("subscribeParabolicRss");
+  } catch (_) {
+    // The item does not exist yet.
+  }
   if (settings.showContextMenu) {
     browser.contextMenus.create({
       id: "openParabolicLink",
       title: "Download link with Parabolic",
       contexts: ["link", "page", "video", "audio"]
+    });
+    browser.contextMenus.create({
+      id: "subscribeParabolicRss",
+      title: "Subscribe to RSS feed with Parabolic",
+      contexts: ["link"]
     });
   }
 }
@@ -785,7 +804,8 @@ function contentSettings() {
     showOverlay: settings.showOverlay,
     quickDownloadPreset: settings.quickDownloadPreset,
     defaultPriority: settings.defaultPriority,
-    overlayPosition: settings.overlayPosition
+    overlayPosition: settings.overlayPosition,
+    watchClipboardInPopup: settings.watchClipboardInPopup === true
   };
 }
 
@@ -911,6 +931,42 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     return requestNativeDownload(message, sender);
   }
 
+  if (message.type === "native-list-subscriptions") {
+    try {
+      const response = await nativeBridge.request("list-subscriptions", {}, 30000);
+      return { ok: true, result: response.payload || response };
+    } catch (error) {
+      return { ok: false, error: serializableError(error, "Unable to list RSS subscriptions.") };
+    }
+  }
+
+  if (message.type === "native-add-subscription") {
+    try {
+      const response = await nativeBridge.request("add-subscription", message.subscription || {}, 30000);
+      return { ok: true, result: response.payload || response };
+    } catch (error) {
+      return { ok: false, error: serializableError(error, "Unable to add the RSS subscription.") };
+    }
+  }
+
+  if (message.type === "native-remove-subscription") {
+    try {
+      await nativeBridge.request("remove-subscription", { subscriptionId: message.subscriptionId }, 30000);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: serializableError(error, "Unable to remove the RSS subscription.") };
+    }
+  }
+
+  if (message.type === "native-check-subscriptions") {
+    try {
+      const response = await nativeBridge.request("check-subscriptions", {}, 120000);
+      return { ok: true, result: response.payload || response };
+    } catch (error) {
+      return { ok: false, error: serializableError(error, "Unable to check RSS subscriptions.") };
+    }
+  }
+
   if (message.type === "native-formats") {
     return requestNativeFormats(message, sender);
   }
@@ -978,6 +1034,26 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 });
 
 browser.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === "subscribeParabolicRss") {
+    const feedUrl = info.linkUrl || "";
+    if (!isHttpUrl(feedUrl)) {
+      return;
+    }
+    const response = await nativeBridge.request("add-subscription", {
+      feedUrl,
+      title: tab.title || new URL(feedUrl).hostname,
+      autoDownload: true,
+      downloadLatestOnly: true,
+      keywordFilter: "",
+      preset: settings.quickDownloadPreset,
+      priority: settings.defaultPriority,
+      pollMinutes: 180
+    }, 30000).catch((error) => ({ ok: false, error }));
+    if (response?.ok === false) {
+      console.error(response.error?.message);
+    }
+    return;
+  }
   if (info.menuItemId !== "openParabolicLink") {
     return;
   }

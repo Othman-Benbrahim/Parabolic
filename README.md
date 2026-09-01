@@ -21,7 +21,16 @@
 </div>
 
 > [!NOTE]
-> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Release **Parabolic 2026.8.6** pairs with the Firefox add-on **0.8.2** on Windows, Linux through Flatpak, and macOS. Facebook video recovery is confirmed. Some LinkedIn players are not yet resolved and are listed as a known limitation. Chrome and Edge packages are not built or supported.
+> This repository is a community adaptation of [NickvisionApps/Parabolic](https://github.com/NickvisionApps/Parabolic). Release **Parabolic 2026.9.0** pairs with the Firefox add-on **0.9.0** on Windows, Linux through Flatpak, and macOS. Facebook video recovery is confirmed. Some LinkedIn players are not yet resolved and are listed as a known limitation. Chrome and Edge packages are not built or supported.
+
+### Persistent automation in 2026.9.0
+
+- Downloads now use explicit task states, typed failure categories and bounded automatic retries.
+- RSS and Atom feeds can be followed from Firefox; new items are queued by the persistent service even after Firefox closes.
+- Direct HTTP links can be pasted into the Firefox popup or sent from its context menu.
+- The resolver layer now has registries for individual media and collections instead of a fixed list of hard-coded branches.
+- Completed files are verified before success is reported; optional SHA-256 calculation is available in Firefox settings.
+- The same daemon and protocol implementation is compiled for Windows x64/ARM64, Linux x86_64/aarch64 and macOS Intel/Apple Silicon.
 
 ## ✨ Features
 
@@ -78,23 +87,23 @@ The Windows installer registers the bridge automatically. Linux publishes a sepa
 
 ## 📥 Installation
 
-Download versioned packages from this repository's [Releases](https://github.com/Othman-Benbrahim/Parabolic/releases). For release `2026.8.6`, publish the package matching the operating system and architecture together with Firefox add-on `0.8.2`.
+Download versioned packages from this repository's [Releases](https://github.com/Othman-Benbrahim/Parabolic/releases). For release `2026.9.0`, publish the package matching the operating system and architecture together with Firefox add-on `0.9.0`.
 
 ### Windows
 
 1. Download `NickvisionParabolicSetup-x64` for most Windows computers, or the ARM64 setup for Windows on ARM.
 2. Close Firefox and Parabolic.
 3. Run the installer. It can be installed over an earlier adapted build.
-4. Install Firefox add-on `0.8.2`, then reload the video page.
+4. Install Firefox add-on `0.9.0`, then reload the video page.
 
 Use the installer rather than the portable archive when you want the Firefox bridge.
 
 ### Linux Flatpak
 
-1. Install the matching `Parabolic-2026.8.6-x86_64.flatpak` or `aarch64` bundle with `flatpak install --user ./FILE.flatpak`.
-2. Extract `Parabolic-2026.8.6-firefox-flatpak-integration.tar.gz`.
+1. Install the matching `Parabolic-2026.9.0-x86_64.flatpak` or `aarch64` bundle with `flatpak install --user ./FILE.flatpak`.
+2. Extract `Parabolic-2026.9.0-firefox-flatpak-integration.tar.gz`.
 3. Run `chmod +x install-flatpak-firefox-integration.sh`, then `./install-flatpak-firefox-integration.sh`.
-4. Restart Firefox and install or update add-on `0.8.2`.
+4. Restart Firefox and install or update add-on `0.9.0`.
 
 The Flatpak bundles the GNOME runtime integration, yt-dlp, FFmpeg, aria2, Deno, N_m3u8DL-RE, the Native Messaging relay and the persistent download service. The helper writes only a launcher below `~/.local/lib/parabolic-flatpak` and Firefox's manifest below `~/.mozilla/native-messaging-hosts`. Run `uninstall-flatpak-firefox-integration.sh` before removing the Flatpak when you no longer need the extension bridge.
 

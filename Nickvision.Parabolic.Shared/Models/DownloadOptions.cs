@@ -50,6 +50,11 @@ public class DownloadOptions
     public Uri? RenewalEndpoint { get; set; }
     public Uri? RenewalSourceUrl { get; set; }
     public string RenewalPreset { get; set; }
+    public int TaskAttempt { get; set; }
+    public int MaxTaskAttempts { get; set; }
+    public string GroupKey { get; set; }
+    public string CollectionId { get; set; }
+    public IReadOnlyList<string> PostProcessingSteps { get; set; }
 
     public DownloadOptions(Uri url)
     {
@@ -95,6 +100,11 @@ public class DownloadOptions
         RenewalEndpoint = null;
         RenewalSourceUrl = null;
         RenewalPreset = "best";
+        TaskAttempt = 1;
+        MaxTaskAttempts = 3;
+        GroupKey = string.Empty;
+        CollectionId = string.Empty;
+        PostProcessingSteps = ["verify-output"];
     }
 
     public string SaveFolder

@@ -921,10 +921,16 @@
           ? `Downloading… ${Math.round(event.progress)}%`
           : event.message || "Starting yt-dlp…";
         showToast(statusMessage, "info", true, "cancel");
-      } else if (event.status === "merging") {
+      } else if (event.status === "merging" || event.status === "processing") {
         currentDownloadActive = true;
-        armDownloadWatchdog(event.downloadId, 60000);
-        showToast("Merging video and audio…", "info", true, "cancel");
+        clearDownloadWatchdog();
+        showToast(event.processingStep
+          ? `Processing: ${event.processingStep}…`
+          : "Processing downloaded media…", "info", true, "cancel");
+      } else if (event.status === "retry-scheduled") {
+        currentDownloadActive = true;
+        clearDownloadWatchdog();
+        showToast(event.actionHint || "Temporary failure; retry scheduled…", "info", true, "cancel");
       } else if (event.status === "completed") {
         currentDownloadActive = false;
         showToast("Download complete.", "success", true, "open-folder");

@@ -18,7 +18,7 @@ using System.Threading.Tasks;
 
 namespace Nickvision.Parabolic.NativeHost;
 
-public sealed class NativeMessagingServer : IDisposable
+internal sealed class NativeMessagingServer : IDisposable
 {
     public const int ProtocolVersion = 3;
 
@@ -30,8 +30,9 @@ public sealed class NativeMessagingServer : IDisposable
     private readonly IDownloadService _downloadService;
     private readonly IYtdlpExecutableService _ytdlpExecutableService;
     private readonly PersistentDownloadCoordinator _downloadCoordinator;
-    private readonly IMediaResolver _directResolver;
-    private readonly IMediaResolver _cobaltResolver;
+    private readonly MediaResolverRegistry _resolverRegistry;
+    private readonly RssSubscriptionService _subscriptionService;
+    private readonly CollectionResolverRegistry _collectionResolvers;
     private readonly ConcurrentDictionary<string, CachedDiscovery> _discoveryCache;
     private readonly SemaphoreSlim _dependencyUpdateLock;
     private CancellationToken _shutdownToken;
@@ -43,7 +44,8 @@ public sealed class NativeMessagingServer : IDisposable
         IDownloadService downloadService,
         IYtdlpExecutableService ytdlpExecutableService,
         PersistentDownloadCoordinator downloadCoordinator,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        RssSubscriptionService subscriptionService)
     {
         _transport = transport;
         _configurationService = configurationService;
@@ -51,8 +53,16 @@ public sealed class NativeMessagingServer : IDisposable
         _downloadService = downloadService;
         _ytdlpExecutableService = ytdlpExecutableService;
         _downloadCoordinator = downloadCoordinator;
-        _directResolver = new DirectMediaResolver();
-        _cobaltResolver = new CobaltMediaResolver(httpClientFactory.CreateClient());
+        _subscriptionService = subscriptionService;
+        _collectionResolvers = new CollectionResolverRegistry(
+        [
+            new RssCollectionResolver(subscriptionService)
+        ]);
+        _resolverRegistry = new MediaResolverRegistry(
+        [
+            new DirectMediaResolver(),
+            new CobaltMediaResolver(httpClientFactory.CreateClient())
+        ]);
         _discoveryCache = new ConcurrentDictionary<string, CachedDiscovery>(StringComparer.Ordinal);
         _dependencyUpdateLock = new SemaphoreSlim(1, 1);
         _shutdownToken = CancellationToken.None;
@@ -102,8 +112,8 @@ public sealed class NativeMessagingServer : IDisposable
                 case "hello":
                     await SendSuccessAsync(request.RequestId, new HelloResponse
                     {
-                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.8.6",
-                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "direct-stream-fallback", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control", "cross-platform-native-host"]
+                        AppVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2026.9.0",
+                        Capabilities = ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "task-state-machine", "typed-errors", "automatic-task-retry", "post-processing-pipeline", "sha256", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "collections", "rss-subscriptions", "cobalt", "direct-media", "direct-http", "direct-stream-fallback", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control", "cross-platform-native-host"]
                     }, NativeJsonContext.Default.HelloResponse, cancellationToken);
                     break;
                 case "get-formats":
@@ -131,6 +141,50 @@ public sealed class NativeMessagingServer : IDisposable
                     {
                         Downloads = _downloadCoordinator.ListActive()
                     }, NativeJsonContext.Default.DownloadsResponse, cancellationToken);
+                    break;
+                case "list-subscriptions":
+                    await SendSuccessAsync(request.RequestId, new SubscriptionsResponse
+                    {
+                        Subscriptions = await _subscriptionService.ListAsync(cancellationToken)
+                    }, NativeJsonContext.Default.SubscriptionsResponse, cancellationToken);
+                    break;
+                case "add-subscription":
+                    var addSubscription = DeserializePayload(request, NativeJsonContext.Default.AddSubscriptionRequest);
+                    var added = await _subscriptionService.AddAsync(addSubscription, cancellationToken);
+                    await SendSuccessAsync(request.RequestId, new SubscriptionsResponse
+                    {
+                        Subscriptions = [added]
+                    }, NativeJsonContext.Default.SubscriptionsResponse, cancellationToken);
+                    break;
+                case "remove-subscription":
+                    var removeSubscription = DeserializePayload(request, NativeJsonContext.Default.RemoveSubscriptionRequest);
+                    if (!await _subscriptionService.RemoveAsync(removeSubscription.SubscriptionId, cancellationToken))
+                    {
+                        throw new NativeRequestException("SUBSCRIPTION_NOT_FOUND", "The requested RSS subscription was not found.");
+                    }
+                    await SendSuccessAsync(request.RequestId, new EmptyPayload(), NativeJsonContext.Default.EmptyPayload, cancellationToken);
+                    break;
+                case "check-subscriptions":
+                    var discoveredItems = await _subscriptionService.CheckAllAsync(true, cancellationToken);
+                    await SendSuccessAsync(request.RequestId, new SubscriptionsResponse
+                    {
+                        Subscriptions = await _subscriptionService.ListAsync(cancellationToken),
+                        DiscoveredItems = discoveredItems
+                    }, NativeJsonContext.Default.SubscriptionsResponse, cancellationToken);
+                    break;
+                case "resolve-collection":
+                    var collectionRequest = DeserializePayload(request, NativeJsonContext.Default.ResolveCollectionRequest);
+                    if (!DirectMediaResolver.TryCreateHttpUri(collectionRequest.Url, out var collectionUrl))
+                    {
+                        throw new NativeRequestException("INVALID_COLLECTION_URL", "A collection requires an HTTP or HTTPS URL.");
+                    }
+                    var collection = await _collectionResolvers.ResolveAsync(collectionUrl, collectionRequest.Limit, cancellationToken);
+                    await SendSuccessAsync(request.RequestId, new ResolveCollectionResponse
+                    {
+                        Resolver = collection.Resolver,
+                        SourceUrl = collection.SourceUrl,
+                        Items = collection.Items
+                    }, NativeJsonContext.Default.ResolveCollectionResponse, cancellationToken);
                     break;
                 case "open-folder":
                     await HandleOpenFolderAsync(request, cancellationToken);
@@ -297,6 +351,10 @@ public sealed class NativeMessagingServer : IDisposable
         options.SpeedLimitKbps = ParseSpeedLimit(mediaRequest.SpeedLimitKbps);
         options.ScheduledAt = scheduledAt;
         ApplyNetworkControls(options, mediaRequest);
+        options.MaxTaskAttempts = ParseMaxTaskAttempts(mediaRequest.MaxTaskAttempts);
+        options.GroupKey = NormalizeIdentifier(mediaRequest.GroupKey, 100);
+        options.CollectionId = NormalizeIdentifier(mediaRequest.CollectionId, 100);
+        options.PostProcessingSteps = ParsePostProcessingSteps(mediaRequest.PostProcessingSteps);
         var snapshot = await _downloadCoordinator.EnqueueAsync(
             options,
             externalId,
@@ -322,7 +380,7 @@ public sealed class NativeMessagingServer : IDisposable
         var hasDirectFallback = TryGetDirectFallbackUrl(request, out var directFallbackUrl);
         if (request.ResolverPreference == "auto")
         {
-            var direct = await _directResolver.ResolveAsync(request, cancellationToken);
+            var direct = await _resolverRegistry.ResolveAsync("direct", request, cancellationToken);
             if (direct is not null)
             {
                 if (scheduledAt.HasValue && LooksTemporaryUrl(direct.Url) && TryGetStablePageUrl(request, out _))
@@ -368,7 +426,7 @@ public sealed class NativeMessagingServer : IDisposable
             {
                 return BuildDeferredCobaltOptions(request);
             }
-            var cobalt = await _cobaltResolver.ResolveAsync(request, cancellationToken)
+            var cobalt = await _resolverRegistry.ResolveAsync("cobalt", request, cancellationToken)
                 ?? throw new NativeRequestException(
                     "COBALT_NOT_CONFIGURED",
                     "Configure a self-hosted Cobalt API endpoint in the Firefox add-on settings.");
@@ -384,7 +442,7 @@ public sealed class NativeMessagingServer : IDisposable
             }
             catch (NativeRequestException discoveryError) when (discoveryError.Code == "NO_MEDIA")
             {
-                var cobalt = await _cobaltResolver.ResolveAsync(request, cancellationToken);
+                var cobalt = await _resolverRegistry.ResolveAsync("cobalt", request, cancellationToken);
                 if (cobalt is not null)
                 {
                     return BuildResolvedDownloadOptions(request, cobalt);
@@ -920,6 +978,42 @@ public sealed class NativeMessagingServer : IDisposable
                 "Bandwidth limit must be 0 (unlimited) or between 32 and 10,000,000 KiB/s.");
         }
         return speedLimitKbps;
+    }
+
+    private static int ParseMaxTaskAttempts(int value)
+    {
+        if (value is < 1 or > 10)
+        {
+            throw new NativeRequestException("INVALID_MAX_ATTEMPTS", "Maximum task attempts must be between 1 and 10.");
+        }
+        return value;
+    }
+
+    private static IReadOnlyList<string> ParsePostProcessingSteps(IReadOnlyList<string>? requested)
+    {
+        var steps = requested is null || requested.Count == 0
+            ? new List<string> { "verify-output" }
+            : requested.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var step in steps)
+        {
+            if (step is not ("verify-output" or "sha256"))
+            {
+                throw new NativeRequestException(
+                    "INVALID_POST_PROCESSOR",
+                    $"Unsupported post-processing step: {step}.");
+            }
+        }
+        if (!steps.Contains("verify-output", StringComparer.OrdinalIgnoreCase))
+        {
+            steps.Insert(0, "verify-output");
+        }
+        return steps;
+    }
+
+    private static string NormalizeIdentifier(string? value, int maxLength)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        return normalized.Length <= maxLength ? normalized : normalized[..maxLength];
     }
 
     private static DateTimeOffset? ParseScheduledAt(string scheduledAt)

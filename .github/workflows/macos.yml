@@ -57,7 +57,9 @@ jobs:
           dotnet restore Nickvision.Parabolic.NativeHost --runtime ${{ matrix.variant.runtime }}
           dotnet restore Nickvision.Parabolic.DownloadService --runtime ${{ matrix.variant.runtime }}
       - name: "Validate Cross-platform Bridge Sources"
-        run: python3 tests/cross-platform/native-bridge-source-smoke.py
+        run: |
+          python3 tests/cross-platform/native-bridge-source-smoke.py
+          python3 tests/cross-platform/download-architecture-smoke.py
       - name: "Package"
         working-directory: ${{ github.workspace }}
         run: |
@@ -65,6 +67,6 @@ jobs:
           ./resources/macos/publish-and-package.sh ${{ matrix.variant.runtime }}
       - uses: actions/upload-artifact@v4
         with:
-          path: ${{ github.workspace }}/dist/Parabolic-2026.8.6-macos-${{ matrix.variant.arch }}.zip
-          name: ${{ env.APP_NAME }}-2026.8.6-macos-${{ matrix.variant.arch }}
+          path: ${{ github.workspace }}/dist/Parabolic-2026.9.0-macos-${{ matrix.variant.arch }}.zip
+          name: ${{ env.APP_NAME }}-2026.9.0-macos-${{ matrix.variant.arch }}
           if-no-files-found: error

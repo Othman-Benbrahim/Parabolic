@@ -68,6 +68,10 @@ internal sealed class MediaRequest
     public string AuthenticationMode { get; set; } = "parabolic";
     public string ProxyMode { get; set; } = "parabolic";
     public bool SendPageReferer { get; set; }
+    public IReadOnlyList<string> PostProcessingSteps { get; set; } = ["verify-output"];
+    public string GroupKey { get; set; } = string.Empty;
+    public string CollectionId { get; set; } = string.Empty;
+    public int MaxTaskAttempts { get; set; } = 3;
 }
 
 internal sealed class CobaltRequest
@@ -98,6 +102,42 @@ internal sealed class SetPriorityRequest
 {
     public string DownloadId { get; set; } = string.Empty;
     public string Priority { get; set; } = "normal";
+}
+
+internal sealed class AddSubscriptionRequest
+{
+    public string FeedUrl { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public bool AutoDownload { get; set; } = true;
+    public bool DownloadLatestOnly { get; set; } = true;
+    public string KeywordFilter { get; set; } = string.Empty;
+    public string Preset { get; set; } = "best";
+    public string Priority { get; set; } = "normal";
+    public int PollMinutes { get; set; } = 180;
+}
+
+internal sealed class RemoveSubscriptionRequest
+{
+    public string SubscriptionId { get; set; } = string.Empty;
+}
+
+internal sealed class SubscriptionsResponse
+{
+    public IReadOnlyList<RssSubscriptionRecord> Subscriptions { get; set; } = [];
+    public int DiscoveredItems { get; set; }
+}
+
+internal sealed class ResolveCollectionRequest
+{
+    public string Url { get; set; } = string.Empty;
+    public int Limit { get; set; } = 25;
+}
+
+internal sealed class ResolveCollectionResponse
+{
+    public string Resolver { get; set; } = string.Empty;
+    public string SourceUrl { get; set; } = string.Empty;
+    public IReadOnlyList<ResolvedCollectionItem> Items { get; set; } = [];
 }
 
 internal sealed class FormatsResponse
@@ -140,6 +180,16 @@ public sealed class DownloadSnapshot
     public string Resolver { get; set; } = "yt-dlp";
     public string? ScheduledAt { get; set; }
     public int? SpeedLimitKbps { get; set; }
+    public string? ErrorCategory { get; set; }
+    public bool? Retryable { get; set; }
+    public string? ActionHint { get; set; }
+    public int Attempt { get; set; } = 1;
+    public int MaxAttempts { get; set; } = 3;
+    public string? NextRetryAt { get; set; }
+    public string? GroupKey { get; set; }
+    public string? CollectionId { get; set; }
+    public string? ProcessingStep { get; set; }
+    public string? Sha256 { get; set; }
 }
 
 internal sealed class DownloadsResponse
@@ -174,6 +224,16 @@ public sealed class DownloadEventPayload
     public string Resolver { get; set; } = "yt-dlp";
     public string? ScheduledAt { get; set; }
     public int? SpeedLimitKbps { get; set; }
+    public string? ErrorCategory { get; set; }
+    public bool? Retryable { get; set; }
+    public string? ActionHint { get; set; }
+    public int Attempt { get; set; } = 1;
+    public int MaxAttempts { get; set; } = 3;
+    public string? NextRetryAt { get; set; }
+    public string? GroupKey { get; set; }
+    public string? CollectionId { get; set; }
+    public string? ProcessingStep { get; set; }
+    public string? Sha256 { get; set; }
 }
 
 [JsonSourceGenerationOptions(
@@ -189,6 +249,14 @@ public sealed class DownloadEventPayload
 [JsonSerializable(typeof(OpenFolderRequest))]
 [JsonSerializable(typeof(DownloadControlRequest))]
 [JsonSerializable(typeof(SetPriorityRequest))]
+[JsonSerializable(typeof(AddSubscriptionRequest))]
+[JsonSerializable(typeof(RemoveSubscriptionRequest))]
+[JsonSerializable(typeof(RssSubscriptionRecord))]
+[JsonSerializable(typeof(List<RssSubscriptionRecord>))]
+[JsonSerializable(typeof(SubscriptionsResponse))]
+[JsonSerializable(typeof(ResolveCollectionRequest))]
+[JsonSerializable(typeof(ResolvedCollectionItem))]
+[JsonSerializable(typeof(ResolveCollectionResponse))]
 [JsonSerializable(typeof(FormatsResponse))]
 [JsonSerializable(typeof(FormatChoice))]
 [JsonSerializable(typeof(DownloadResponse))]

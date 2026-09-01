@@ -5,7 +5,9 @@ using Microsoft.Extensions.Logging;
 using System.Net.Http;
 using Nickvision.Parabolic.NativeHost;
 using Nickvision.Parabolic.Shared.Helpers;
+using Nickvision.Parabolic.Shared.Models;
 using Nickvision.Parabolic.Shared.Services;
+using Nickvision.Desktop.Helpers;
 using System;
 using System.Collections.Generic;
 using System.IO.Pipes;
@@ -46,11 +48,48 @@ internal static class Program
             builder.Logging.ClearProviders();
             builder.Services.RemoveAll<IRecoveryService>();
             builder.Services.AddSingleton<IRecoveryService, BackgroundRecoveryService>();
+            builder.Services.AddSingleton<IPostDownloadPipeline, PostDownloadPipeline>();
+            builder.Services.AddSingleton<RssSubscriptionService>();
             builder.Services.AddSingleton<PersistentDownloadCoordinator>();
             using var host = builder.Build();
             await host.StartAsync(shutdown.Token);
 
             var coordinator = host.Services.GetRequiredService<PersistentDownloadCoordinator>();
+            var subscriptionService = host.Services.GetRequiredService<RssSubscriptionService>();
+            var configurationService = host.Services.GetRequiredService<Nickvision.Desktop.Application.IConfigurationService>();
+            subscriptionService.ItemDiscovered = async (item, cancellationToken) =>
+            {
+                var title = item.Title.SanitizeForFilename(configurationService.LimitCharacters).Trim();
+                var isAudio = item.Preset == "audio";
+                var options = new DownloadOptions(item.Url)
+                {
+                    SaveFilename = string.IsNullOrWhiteSpace(title) ? "RSS item" : title,
+                    SaveFolder = configurationService.PreviousSaveFolder,
+                    FileType = isAudio
+                        ? configurationService.PreviousAudioOnlyFileType
+                        : configurationService.PreviousFullFileType,
+                    VideoFormat = isAudio ? Format.NoneVideo : null,
+                    AudioFormat = Format.BestAudio,
+                    VideoResolution = isAudio ? null : VideoResolution.Best,
+                    UseSleepPreset = false,
+                    KeepPartialFiles = true,
+                    Priority = item.Priority switch
+                    {
+                        "high" => DownloadPriority.High,
+                        "low" => DownloadPriority.Low,
+                        _ => DownloadPriority.Normal
+                    },
+                    ResolverName = "yt-dlp",
+                    SourceKind = "rss",
+                    GroupKey = item.SubscriptionId,
+                    CollectionId = item.SubscriptionId,
+                    PostProcessingSteps = ["verify-output"]
+                };
+                var externalId = ($"rss-{Guid.NewGuid():N}")[..20];
+                await coordinator.EnqueueAsync(options, externalId, -1, cancellationToken);
+                return true;
+            };
+            await subscriptionService.StartAsync(shutdown.Token);
             var recoveryService = host.Services.GetRequiredService<IRecoveryService>();
             if (recoveryService.Count > 0)
             {
@@ -155,7 +194,8 @@ internal static class Program
             services.GetRequiredService<IDownloadService>(),
             services.GetRequiredService<IYtdlpExecutableService>(),
             coordinator,
-            services.GetRequiredService<IHttpClientFactory>());
+            services.GetRequiredService<IHttpClientFactory>(),
+            services.GetRequiredService<RssSubscriptionService>());
         await server.RunAsync(cancellationToken);
     }
 }

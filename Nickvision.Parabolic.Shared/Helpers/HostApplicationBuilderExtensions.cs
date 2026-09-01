@@ -18,8 +18,15 @@ public static class HostApplicationBuilderExtensions
         {
             var appInfo = new AppInfo("org.nickvision.tubeconverter", "Nickvision Parabolic", "Parabolic")
             {
-                Version = new AppVersion("2026.8.6"),
+                Version = new AppVersion("2026.9.0"),
                 Changelog = """
+                - Added a formal persistent task state machine with typed failure categories
+                - Added bounded automatic task retries with exponential backoff
+                - Added RSS and Atom subscriptions with filters and duplicate protection
+                - Added extensible media and collection resolver registries
+                - Added direct HTTP entry points and optional Firefox clipboard watching
+                - Added a post-download verification and optional SHA-256 pipeline
+                - Fixed clearing completed downloads stopping the scheduling timer
                 - Added native Linux x64 and ARM64 packages with per-user Firefox and systemd integration
                 - Added macOS Intel and Apple Silicon bundles with per-user Firefox and LaunchAgent integration
                 - Ported the persistent download service and Native Messaging relay to Unix domain sockets

@@ -1,6 +1,6 @@
 # Privacy Policy for Parabolic Download Manager
 
-Effective date: August 18, 2026
+Effective date: September 1, 2026
 
 Parabolic Download Manager is a Firefox extension that detects downloadable media in web pages and sends user-requested download operations to the Parabolic desktop application through Firefox Native Messaging.
 
@@ -16,8 +16,14 @@ The extension may process the following information in the browser:
 - the address and authentication choice for a Cobalt instance configured by the user;
 - the status and identifier of a download;
 - extension preferences stored locally in Firefox.
+- clipboard text explicitly pasted by the user, or read while the popup is open when the optional clipboard watcher is enabled;
+- RSS or Atom feed URLs explicitly submitted by the user.
 
 Media detection happens locally in Firefox. Detected media candidates are kept in memory and are not sent to the developer.
+
+Clipboard access only fills the direct-download field. Clipboard contents are never downloaded automatically, stored by the add-on, or sent to the developer. The optional watcher stops as soon as the Firefox popup closes.
+
+RSS and Atom subscriptions are stored by the local Parabolic service. The service contacts those feeds at the configured interval and retains a bounded list of item identifiers to prevent duplicates. Subscription data is not sent to the developer.
 
 ## Native Messaging and transmission
 

@@ -12,10 +12,41 @@ namespace Nickvision.Parabolic.NativeHost;
 
 internal sealed record ResolvedMedia(Uri Url, string Filename, string ResolverName, string SourceKind);
 
+internal sealed record ResolverCapabilities(
+    bool HandlesDirectFiles,
+    bool HandlesPages,
+    bool HandlesCollections,
+    bool RequiresNetwork);
+
 internal interface IMediaResolver
 {
     string Name { get; }
+    ResolverCapabilities Capabilities { get; }
     Task<ResolvedMedia?> ResolveAsync(MediaRequest request, CancellationToken cancellationToken);
+}
+
+internal sealed class MediaResolverRegistry
+{
+    private readonly IReadOnlyDictionary<string, IMediaResolver> _resolvers;
+
+    public MediaResolverRegistry(IEnumerable<IMediaResolver> resolvers)
+    {
+        _resolvers = resolvers.ToDictionary(resolver => resolver.Name, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public IReadOnlyList<string> Names => _resolvers.Keys.OrderBy(name => name, StringComparer.Ordinal).ToList();
+
+    public Task<ResolvedMedia?> ResolveAsync(
+        string name,
+        MediaRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!_resolvers.TryGetValue(name, out var resolver))
+        {
+            throw new NativeRequestException("RESOLVER_NOT_FOUND", $"The requested media resolver is not registered: {name}.");
+        }
+        return resolver.ResolveAsync(request, cancellationToken);
+    }
 }
 
 internal sealed class DirectMediaResolver : IMediaResolver
@@ -26,6 +57,7 @@ internal sealed class DirectMediaResolver : IMediaResolver
     };
 
     public string Name => "direct";
+    public ResolverCapabilities Capabilities { get; } = new(true, false, false, false);
 
     public Task<ResolvedMedia?> ResolveAsync(MediaRequest request, CancellationToken cancellationToken)
     {
@@ -60,6 +92,7 @@ internal sealed class CobaltMediaResolver : IMediaResolver
     private readonly HttpClient _httpClient;
 
     public string Name => "cobalt";
+    public ResolverCapabilities Capabilities { get; } = new(false, true, false, true);
 
     public CobaltMediaResolver(HttpClient httpClient)
     {

@@ -60,6 +60,14 @@
     <display_length compare="ge">360</display_length>
   </requires>
   <releases>
+    <release version="2026.9.0" date="2026-09-01">
+      <description translate="no">
+        <p>- Added a persistent task state machine with typed failures and bounded automatic retries</p>
+        <p>- Added RSS and Atom subscriptions with filters, duplicate protection and background downloads</p>
+        <p>- Added extensible media and collection resolver registries</p>
+        <p>- Added direct HTTP entry points, optional Firefox clipboard watching and post-download verification</p>
+      </description>
+    </release>
     <release version="2026.8.6" date="2026-08-20">
       <description translate="no">
         <p>- Added Linux x86_64 and aarch64 Flatpak bundles with a host-side Firefox integration helper</p>

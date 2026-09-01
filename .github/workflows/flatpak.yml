@@ -39,9 +39,10 @@ jobs:
         run: |
           python3 tests/linux/flatpak-manifest-smoke.py
           python3 tests/cross-platform/native-bridge-source-smoke.py
+          python3 tests/cross-platform/download-architecture-smoke.py
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: Parabolic-2026.8.6-${{ matrix.variant.arch }}.flatpak
+          bundle: Parabolic-2026.9.0-${{ matrix.variant.arch }}.flatpak
           manifest-path: flatpak/org.nickvision.tubeconverter.json
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.variant.arch }}
@@ -51,13 +52,13 @@ jobs:
       - name: Upload Flatpak bundle
         uses: actions/upload-artifact@v4
         with:
-          name: Parabolic-2026.8.6-flatpak-${{ matrix.variant.arch }}
-          path: Parabolic-2026.8.6-${{ matrix.variant.arch }}.flatpak
+          name: Parabolic-2026.9.0-flatpak-${{ matrix.variant.arch }}
+          path: Parabolic-2026.9.0-${{ matrix.variant.arch }}.flatpak
           if-no-files-found: error
       - name: Package Firefox integration helper
         if: ${{ matrix.variant.arch == 'x86_64' }}
         run: |
-          tar -czf Parabolic-2026.8.6-firefox-flatpak-integration.tar.gz \
+          tar -czf Parabolic-2026.9.0-firefox-flatpak-integration.tar.gz \
             -C resources/linux \
             install-flatpak-firefox-integration.sh \
             uninstall-flatpak-firefox-integration.sh \
@@ -66,6 +67,6 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{ matrix.variant.arch == 'x86_64' }}
         with:
-          name: Parabolic-2026.8.6-firefox-flatpak-integration
-          path: Parabolic-2026.8.6-firefox-flatpak-integration.tar.gz
+          name: Parabolic-2026.9.0-firefox-flatpak-integration
+          path: Parabolic-2026.9.0-firefox-flatpak-integration.tar.gz
           if-no-files-found: error

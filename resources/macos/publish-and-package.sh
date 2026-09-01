@@ -38,7 +38,7 @@ APP_NAME="Parabolic"
 PROJECT="Nickvision.Parabolic.GNOME"
 NATIVE_HOST_PROJECT="Nickvision.Parabolic.NativeHost"
 DOWNLOAD_SERVICE_PROJECT="Nickvision.Parabolic.DownloadService"
-VERSION="2026.8.6"
+VERSION="2026.9.0"
 RUNTIME="$1"
 APP_BUNDLE="${APP_NAME}.app"
 case "$RUNTIME" in

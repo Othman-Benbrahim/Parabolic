@@ -76,6 +76,23 @@
         </span>
         <input type="number" id="speedLimitKbps" min="0" max="10000000" step="32" inputmode="numeric">
       </label>
+      <label class="setting" for="maxTaskAttempts">
+        <span>
+          <strong>Maximum task attempts</strong>
+          <small>Retry transient network and rate-limit failures with exponential backoff.</small>
+        </span>
+        <input type="number" id="maxTaskAttempts" min="1" max="10" step="1" inputmode="numeric">
+      </label>
+      <label class="setting toggle-setting" for="computeSha256">
+        <span>
+          <strong>Compute SHA-256 after download</strong>
+          <small>Verifies the output first, then records a checksum. Large files take longer to process.</small>
+        </span>
+        <span class="toggle">
+          <input type="checkbox" id="computeSha256">
+          <span class="slider"></span>
+        </span>
+      </label>
     </section>
 
     <section>
@@ -217,6 +234,16 @@
         </span>
         <span class="toggle">
           <input type="checkbox" id="trimPlaylist">
+          <span class="slider"></span>
+        </span>
+      </label>
+      <label class="setting toggle-setting" for="watchClipboardInPopup">
+        <span>
+          <strong>Watch clipboard while the popup is open</strong>
+          <small>When enabled, an HTTP link copied by you is placed in the direct-download field. Nothing is downloaded automatically.</small>
+        </span>
+        <span class="toggle">
+          <input type="checkbox" id="watchClipboardInPopup">
           <span class="slider"></span>
         </span>
       </label>
