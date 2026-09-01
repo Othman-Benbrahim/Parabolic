@@ -927,6 +927,15 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     }
   }
 
+  if (message.type === "open-options-page") {
+    try {
+      await browser.runtime.openOptionsPage();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: serializableError(error, "Unable to open settings.") };
+    }
+  }
+
   if (message.type === "native-download") {
     return requestNativeDownload(message, sender);
   }

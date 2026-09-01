@@ -35,6 +35,7 @@
   let downloadWatchdogTimer = null;
   let currentDownloadId = null;
   let currentDownloadActive = false;
+  let overlayDismissed = false;
   const acknowledgedDownloads = new Set();
   const earlyDownloadStates = new Map();
 
@@ -100,12 +101,43 @@
       border-left: 1px solid rgba(255, 255, 255, .36);
       font-size: 12px;
     }
-    .quick:hover, .toggle:hover, .quick:focus-visible, .toggle:focus-visible { background: #c92f34; }
-    .quick:focus-visible, .toggle:focus-visible, .menu-item:focus-visible, .link-button:focus-visible {
+    .close {
+      min-height: 36px;
+      width: 30px;
+      border: 0;
+      border-left: 1px solid rgba(255, 255, 255, .36);
+      background: #e63a3f;
+      color: #fff;
+      cursor: pointer;
+      font-size: 17px;
+      line-height: 1;
+    }
+    .quick:hover, .toggle:hover, .close:hover,
+    .quick:focus-visible, .toggle:focus-visible, .close:focus-visible { background: #c92f34; }
+    .quick:focus-visible, .toggle:focus-visible, .close:focus-visible, .menu-item:focus-visible, .link-button:focus-visible, .shortcut:focus-visible {
       outline: 2px solid #fff;
       outline-offset: -3px;
     }
     .quick:disabled, .toggle:disabled { cursor: wait; opacity: .75; }
+    .shortcut-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      padding: 2px 4px 8px;
+    }
+    .shortcut {
+      min-height: 34px;
+      padding: 6px 5px;
+      border: 1px solid #e63a3f;
+      border-radius: 8px;
+      background: #e63a3f;
+      color: #fff;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 750;
+      text-align: center;
+    }
+    .shortcut:hover { background: #c92f34; border-color: #c92f34; }
     .menu {
       position: absolute;
       top: calc(100% + 8px);
@@ -488,7 +520,7 @@
     }
   }
 
-  async function startDownload(preset, formatId = "", scheduledAt = "") {
+  async function startDownload(preset, formatId = "", scheduledAt = "", requestOverride = null) {
     if (!primaryMedia) {
       showToast("No active video was found.", "error");
       return;
@@ -502,7 +534,7 @@
     try {
       const response = await browser.runtime.sendMessage({
         type: "native-download",
-        request: buildRequest(preset, formatId, scheduledAt)
+        request: requestOverride || buildRequest(preset, formatId, scheduledAt)
       });
       if (!response?.ok) {
         throw new Error(response?.error?.message || "Parabolic could not start the download.");
@@ -555,6 +587,82 @@
     }
   }
 
+  function startDirectDownload() {
+    const value = window.prompt("Direct HTTP/HTTPS URL", "");
+    if (value === null) {
+      return;
+    }
+    const directUrl = normalizeMediaUrl(value.trim());
+    if (!directUrl) {
+      showToast("Enter a valid HTTP or HTTPS URL.", "error");
+      return;
+    }
+    let title = "Direct download";
+    try {
+      title = decodeURIComponent(new URL(directUrl).pathname.split("/").filter(Boolean).pop() || title);
+    } catch (_) {
+      // normalizeMediaUrl already validated the URL.
+    }
+    menu.hidden = true;
+    menuButton.setAttribute("aria-expanded", "false");
+    startDownload(settings.quickDownloadPreset, "", "", {
+      pageUrl: directUrl,
+      mediaUrl: directUrl,
+      title,
+      preset: settings.quickDownloadPreset,
+      priority: settings.defaultPriority,
+      sourceKind: "direct"
+    });
+  }
+
+  async function addRssSubscription() {
+    const value = window.prompt("RSS or Atom feed URL", location.href);
+    if (value === null) {
+      return;
+    }
+    const feedUrl = normalizeMediaUrl(value.trim());
+    if (!feedUrl) {
+      showToast("Enter a valid RSS or Atom feed URL.", "error");
+      return;
+    }
+    menu.hidden = true;
+    menuButton.setAttribute("aria-expanded", "false");
+    showToast("Saving RSS subscriptionâ€¦", "info", true);
+    try {
+      const response = await browser.runtime.sendMessage({
+        type: "native-add-subscription",
+        subscription: {
+          feedUrl,
+          title: new URL(feedUrl).hostname,
+          autoDownload: true,
+          downloadLatestOnly: true,
+          keywordFilter: "",
+          preset: settings.quickDownloadPreset,
+          priority: settings.defaultPriority,
+          pollMinutes: 180
+        }
+      });
+      if (!response?.ok) {
+        throw new Error(response?.error?.message || "Unable to add the RSS subscription.");
+      }
+      showToast("RSS subscription saved.", "success");
+    } catch (error) {
+      showToast(error.message || "Unable to add the RSS subscription.", "error", true);
+    }
+  }
+
+  async function openSettings() {
+    menu.hidden = true;
+    menuButton.setAttribute("aria-expanded", "false");
+    try {
+      const response = await browser.runtime.sendMessage({ type: "open-options-page" });
+      if (!response?.ok) {
+        throw new Error(response?.error?.message || "Unable to open settings.");
+      }
+    } catch (error) {
+      showToast(error.message || "Unable to open settings.", "error");
+    }
+  }
   function scheduleDownload() {
     const initial = new Date(Date.now() + 60 * 60 * 1000);
     initial.setSeconds(0, 0);
@@ -717,6 +825,16 @@
     const group = document.createElement("div");
     group.className = "button-group";
 
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "close";
+    closeButton.textContent = "Ã—";
+    closeButton.title = "Hide Parabolic on this page";
+    closeButton.setAttribute("aria-label", "Hide Parabolic on this page");
+    closeButton.addEventListener("click", () => {
+      overlayDismissed = true;
+      host.style.display = "none";
+    });
     mainButton = document.createElement("button");
     mainButton.type = "button";
     mainButton.className = "quick";
@@ -745,6 +863,32 @@
     bridgeIndicator.textContent = "Checking app";
     header.append(headerTitle, bridgeIndicator);
     menu.append(header);
+    const shortcutGrid = document.createElement("div");
+    shortcutGrid.className = "shortcut-grid";
+
+    const directButton = document.createElement("button");
+    directButton.type = "button";
+    directButton.className = "shortcut";
+    directButton.textContent = "TÃ©lÃ©chargement direct";
+    directButton.title = "Download a direct HTTP or HTTPS URL";
+    directButton.addEventListener("click", startDirectDownload);
+
+    const rssButton = document.createElement("button");
+    rssButton.type = "button";
+    rssButton.className = "shortcut";
+    rssButton.textContent = "RSS";
+    rssButton.title = "Add an RSS or Atom subscription";
+    rssButton.addEventListener("click", addRssSubscription);
+
+    const settingsButton = document.createElement("button");
+    settingsButton.type = "button";
+    settingsButton.className = "shortcut";
+    settingsButton.textContent = "ParamÃ¨tres";
+    settingsButton.title = "Open Parabolic add-on settings";
+    settingsButton.addEventListener("click", openSettings);
+
+    shortcutGrid.append(directButton, rssButton, settingsButton);
+    menu.append(shortcutGrid);
     for (const preset of PRESETS) {
       menu.append(presetButton(preset));
     }
@@ -803,7 +947,7 @@
     toastActions = document.createElement("div");
     toastActions.className = "toast-actions";
     toast.append(toastMessage, toastActions);
-    group.append(mainButton, menuButton);
+    group.append(mainButton, menuButton, closeButton);
     shell.append(group, menu, toast);
     shadow.append(style, shell);
     document.documentElement.append(host);
@@ -818,6 +962,12 @@
 
   function updatePosition() {
     positionFrame = null;
+    if (overlayDismissed) {
+      if (host) {
+        host.style.display = "none";
+      }
+      return;
+    }
     if (!host || !primaryMedia || !settings.detectMedia || !settings.showOverlay) {
       if (host) {
         host.style.display = "none";
