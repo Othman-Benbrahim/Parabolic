@@ -244,7 +244,6 @@ Available options:
 ## ⚠️ Known limitations
 
 - Facebook videos have been validated with the permalink, HLS/DASH and direct-stream recovery paths.
-- Some LinkedIn players expose only transient, embedded or otherwise unusable media addresses. Those videos can still return **Parabolic could not find downloadable media**; improved LinkedIn handling is planned for a later release.
 - A direct CDN fallback can occasionally contain video without a separate audio track.
 - DRM-protected streams are deliberately unsupported. The project does not request, store or use decryption keys.
 - Firefox must be restarted after installing or replacing a Native Messaging manifest.
