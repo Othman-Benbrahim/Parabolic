@@ -102,17 +102,26 @@
       font-size: 12px;
     }
     .close {
-      min-height: 36px;
-      width: 30px;
-      border: 0;
-      border-left: 1px solid rgba(255, 255, 255, .36);
-      background: #e63a3f;
+      position: absolute;
+      top: -7px;
+      right: -7px;
+      z-index: 3;
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      min-height: 20px;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, .72);
+      border-radius: 50%;
+      background: #b5262b;
       color: #fff;
       cursor: pointer;
-      font-size: 17px;
+      box-shadow: 0 2px 7px rgba(0, 0, 0, .35);
+      font-size: 15px;
+      font-weight: 800;
       line-height: 1;
-    }
-    .quick:hover, .toggle:hover, .close:hover,
+    }    .quick:hover, .toggle:hover, .close:hover,
     .quick:focus-visible, .toggle:focus-visible, .close:focus-visible { background: #c92f34; }
     .quick:focus-visible, .toggle:focus-visible, .close:focus-visible, .menu-item:focus-visible, .link-button:focus-visible, .shortcut:focus-visible {
       outline: 2px solid #fff;
@@ -616,24 +625,27 @@
   }
 
   async function addRssSubscription() {
-    const value = window.prompt("RSS or Atom feed URL", location.href);
+    const value = window.prompt(
+      "URL de cha\u00eene YouTube, playlist ou flux RSS/Atom",
+      location.href
+    );
     if (value === null) {
       return;
     }
-    const feedUrl = normalizeMediaUrl(value.trim());
-    if (!feedUrl) {
-      showToast("Enter a valid RSS or Atom feed URL.", "error");
+    const sourceUrl = normalizeMediaUrl(value.trim());
+    if (!sourceUrl) {
+      showToast("Entrez une URL HTTP/HTTPS valide.", "error");
       return;
     }
     menu.hidden = true;
     menuButton.setAttribute("aria-expanded", "false");
-    showToast("Saving RSS subscriptionâ€¦", "info", true);
+    showToast("Ajout de l\u2019abonnement RSS\u2026", "info", true);
     try {
       const response = await browser.runtime.sendMessage({
         type: "native-add-subscription",
         subscription: {
-          feedUrl,
-          title: new URL(feedUrl).hostname,
+          feedUrl: sourceUrl,
+          title: new URL(sourceUrl).hostname,
           autoDownload: true,
           downloadLatestOnly: true,
           keywordFilter: "",
@@ -643,14 +655,13 @@
         }
       });
       if (!response?.ok) {
-        throw new Error(response?.error?.message || "Unable to add the RSS subscription.");
+        throw new Error(response?.error?.message || "Impossible d\u2019ajouter l\u2019abonnement.");
       }
-      showToast("RSS subscription saved.", "success");
+      showToast("Abonnement RSS ajout\u00e9.", "success");
     } catch (error) {
-      showToast(error.message || "Unable to add the RSS subscription.", "error", true);
+      showToast(error.message || "Impossible d\u2019ajouter l\u2019abonnement.", "error", true);
     }
   }
-
   async function openSettings() {
     menu.hidden = true;
     menuButton.setAttribute("aria-expanded", "false");
@@ -828,9 +839,9 @@
     const closeButton = document.createElement("button");
     closeButton.type = "button";
     closeButton.className = "close";
-    closeButton.textContent = "Ã—";
-    closeButton.title = "Hide Parabolic on this page";
-    closeButton.setAttribute("aria-label", "Hide Parabolic on this page");
+    closeButton.textContent = "\u00d7";
+    closeButton.title = "Masquer Parabolic sur cette page";
+    closeButton.setAttribute("aria-label", "Masquer Parabolic sur cette page");
     closeButton.addEventListener("click", () => {
       overlayDismissed = true;
       host.style.display = "none";
@@ -869,7 +880,7 @@
     const directButton = document.createElement("button");
     directButton.type = "button";
     directButton.className = "shortcut";
-    directButton.textContent = "TÃ©lÃ©chargement direct";
+    directButton.textContent = "T\u00e9l\u00e9chargement direct";
     directButton.title = "Download a direct HTTP or HTTPS URL";
     directButton.addEventListener("click", startDirectDownload);
 
@@ -883,7 +894,7 @@
     const settingsButton = document.createElement("button");
     settingsButton.type = "button";
     settingsButton.className = "shortcut";
-    settingsButton.textContent = "ParamÃ¨tres";
+    settingsButton.textContent = "Param\u00e8tres";
     settingsButton.title = "Open Parabolic add-on settings";
     settingsButton.addEventListener("click", openSettings);
 
@@ -947,8 +958,8 @@
     toastActions = document.createElement("div");
     toastActions.className = "toast-actions";
     toast.append(toastMessage, toastActions);
-    group.append(mainButton, menuButton, closeButton);
-    shell.append(group, menu, toast);
+    group.append(mainButton, menuButton);
+    shell.append(closeButton, group, menu, toast);
     shadow.append(style, shell);
     document.documentElement.append(host);
 

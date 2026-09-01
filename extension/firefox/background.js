@@ -550,6 +550,92 @@ async function refreshAllBadges() {
   await Promise.all(tabs.map((tab) => updateBadge(tab.id)));
 }
 
+function isYouTubeSubscriptionHost(hostname) {
+  return /(^|\.)youtube\.com$/i.test(hostname) || /^youtu\.be$/i.test(hostname);
+}
+
+function directYouTubeFeedUrl(value) {
+  if (!isHttpUrl(value)) {
+    return "";
+  }
+
+  const parsed = new URL(value);
+  if (!isYouTubeSubscriptionHost(parsed.hostname)) {
+    return "";
+  }
+
+  if (/youtube\.com$/i.test(parsed.hostname) && parsed.pathname === "/feeds/videos.xml") {
+    return parsed.href;
+  }
+
+  const playlistId = parsed.searchParams.get("list");
+  if (playlistId) {
+    return `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`;
+  }
+
+  const channelMatch = parsed.pathname.match(
+    /^\/channel\/(UC[A-Za-z0-9_-]{20,})(?:\/(?:videos|shorts|streams|playlists|featured|community|podcasts|about))?\/?$/i
+  );
+  if (channelMatch?.[1]) {
+    return `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelMatch[1])}`;
+  }
+
+  return "";
+}
+
+async function resolveSubscriptionFeedUrl(value) {
+  if (!isHttpUrl(value)) {
+    throw new Error("Only HTTP and HTTPS subscription URLs are supported.");
+  }
+
+  const parsed = new URL(value);
+  if (!isYouTubeSubscriptionHost(parsed.hostname)) {
+    return value;
+  }
+
+  const directFeed = directYouTubeFeedUrl(value);
+  if (directFeed) {
+    return directFeed;
+  }
+
+  const channelPagePattern =
+    /^\/(?:@[^/]+|c\/[^/]+|user\/[^/]+)(?:\/(?:videos|shorts|streams|playlists|featured|community|podcasts|about))?\/?$/i;
+  if (!/youtube\.com$/i.test(parsed.hostname) || !channelPagePattern.test(parsed.pathname)) {
+    throw new Error("Use a YouTube channel or playlist URL for an RSS subscription.");
+  }
+
+  let response;
+  try {
+    response = await fetch(parsed.href, {
+      credentials: "omit",
+      redirect: "follow"
+    });
+  } catch (_) {
+    throw new Error("Unable to resolve the YouTube channel.");
+  }
+
+  if (!response.ok) {
+    throw new Error(`YouTube returned HTTP ${response.status} while resolving the channel.`);
+  }
+
+  const html = (await response.text()).slice(0, 6000000);
+  const channelIdPatterns = [
+    /<meta[^>]+itemprop=["']channelId["'][^>]+content=["'](UC[A-Za-z0-9_-]{20,})["']/i,
+    /<meta[^>]+content=["'](UC[A-Za-z0-9_-]{20,})["'][^>]+itemprop=["']channelId["']/i,
+    /"channelId":"(UC[A-Za-z0-9_-]{20,})"/,
+    /"externalId":"(UC[A-Za-z0-9_-]{20,})"/,
+    /"browseId":"(UC[A-Za-z0-9_-]{20,})"/
+  ];
+
+  for (const pattern of channelIdPatterns) {
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      return `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(match[1])}`;
+    }
+  }
+
+  throw new Error("Unable to find the YouTube channel ID for this URL.");
+}
 async function openParabolicUrl(url, tabId) {
   if (!isHttpUrl(url)) {
     throw new Error("Only HTTP and HTTPS URLs can be opened in Parabolic.");
@@ -951,13 +1037,18 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 
   if (message.type === "native-add-subscription") {
     try {
-      const response = await nativeBridge.request("add-subscription", message.subscription || {}, 30000);
-      return { ok: true, result: response.payload || response };
+      const subscription = { ...(message.subscription || {}) };
+      subscription.feedUrl = await resolveSubscriptionFeedUrl(subscription.feedUrl || "");
+      const response = await nativeBridge.request("add-subscription", subscription, 30000);
+      return {
+        ok: true,
+        result: response.payload || response,
+        resolvedFeedUrl: subscription.feedUrl
+      };
     } catch (error) {
       return { ok: false, error: serializableError(error, "Unable to add the RSS subscription.") };
     }
   }
-
   if (message.type === "native-remove-subscription") {
     try {
       await nativeBridge.request("remove-subscription", { subscriptionId: message.subscriptionId }, 30000);
