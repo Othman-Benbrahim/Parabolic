@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import re
+from calendar import monthrange
 from collections import Counter
 from pathlib import Path
 
@@ -127,6 +129,24 @@ require(
     all(len(source.get("sha256", "")) == 64 for source in ffmpeg_sources),
     "every FFmpeg archive must have a SHA-256 digest",
 )
+ffmpeg_urls = [source.get("url", "") for source in ffmpeg_sources]
+retained_tag = re.compile(r"/autobuild-(\d{4})-(\d{2})-(\d{2})-\d{2}-\d{2}/")
+retained_matches = [retained_tag.search(url) for url in ffmpeg_urls]
+require(
+    all(match is not None for match in retained_matches),
+    "FFmpeg archives must use dated BtbN autobuild releases",
+)
+require(
+    len({match.group(0) for match in retained_matches if match}) == 1,
+    "FFmpeg architectures must come from the same BtbN release",
+)
+for match in retained_matches:
+    if match:
+        year, month, day = (int(value) for value in match.groups())
+        require(
+            day == monthrange(year, month)[1],
+            "FFmpeg must use BtbN's retained end-of-month release",
+        )
 
 print(
     f"Flatpak inputs OK: GNOME {runtime_version} runtime with GNOME 50 builder, "
