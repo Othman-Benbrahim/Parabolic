@@ -43,6 +43,10 @@ require(
     "flatpak-github-actions:gnome-50" in workflow,
     "workflow must use the GNOME 50 Flatpak builder image",
 )
+require(
+    '"synchronize"' in workflow,
+    "pull-request commits must trigger a fresh Flatpak build",
+)
 require(runtime_version == "50", "application runtime must remain GNOME 50")
 require(
     "org.freedesktop.Sdk.Extension.dotnet10" in manifest.get("sdk-extensions", []),
