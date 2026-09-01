@@ -23,6 +23,12 @@ const nativePort = {
         ? { appVersion: "test", protocolVersion: 3, capabilities: ["ytdlp-update", "persistent-queue", "priority", "resolver-pipeline", "scheduling"] }
         : message.type === "list-downloads"
           ? { downloads: [] }
+        : message.type === "list-subscriptions"
+          ? { subscriptions: [] }
+        : message.type === "add-subscription"
+          ? { subscriptions: [{ id: "rss-test", feedUrl: message.payload.feedUrl }] }
+        : message.type === "check-subscriptions"
+          ? { subscriptions: [], discoveredItems: 1 }
         : message.type === "download"
           ? { downloadId: "download-test", status: "queued" }
           : message.type === "check-ytdlp-update"
@@ -64,7 +70,7 @@ const browser = {
       nativeHostName = name;
       return nativePort;
     },
-    getManifest() { return { version: "0.8.2" }; },
+    getManifest() { return { version: "0.9.0" }; },
     getURL(value) { return `moz-extension://test/${value}`; },
     onMessage: { addListener(listener) { runtimeMessageListeners.push(listener); } },
     onInstalled: { addListener() {} },
@@ -83,7 +89,9 @@ const browser = {
           networkStrategy: "aggressive",
           authenticationMode: "firefox",
           proxyMode: "direct",
-          sendPageReferer: true
+          sendPageReferer: true,
+          maxTaskAttempts: 5,
+          computeSha256: true
         };
       },
       async set() {}
@@ -190,6 +198,8 @@ async function send(message, sender = {}) {
   assert.equal(request.payload.authenticationMode, "firefox");
   assert.equal(request.payload.proxyMode, "direct");
   assert.equal(request.payload.sendPageReferer, true);
+  assert.equal(request.payload.maxTaskAttempts, 5);
+  assert.deepEqual(Array.from(request.payload.postProcessingSteps), ["verify-output", "sha256"]);
 
   const facebookSender = {
     tab: { id: 84, url: "https://www.facebook.com/?_fb_noscript=1", title: "Facebook video" },
@@ -291,6 +301,30 @@ async function send(message, sender = {}) {
   assert.equal(openFolder.ok, true);
   assert(nativeRequests.some((item) => item.type === "open-folder"
     && item.payload.downloadId === "download-test"));
+
+  const subscriptions = await send({ type: "native-list-subscriptions" }, sender);
+  assert.equal(subscriptions.ok, true);
+  assert(nativeRequests.some((item) => item.type === "list-subscriptions"));
+
+  const subscription = await send({
+    type: "native-add-subscription",
+    subscription: {
+      feedUrl: "https://example.com/feed.xml",
+      title: "Example feed",
+      autoDownload: true,
+      downloadLatestOnly: true,
+      preset: "best",
+      priority: "normal",
+      pollMinutes: 180
+    }
+  }, sender);
+  assert.equal(subscription.ok, true);
+  assert(nativeRequests.some((item) => item.type === "add-subscription"
+    && item.payload.feedUrl === "https://example.com/feed.xml"));
+
+  const checked = await send({ type: "native-check-subscriptions" }, sender);
+  assert.equal(checked.ok, true);
+  assert.equal(checked.result.discoveredItems, 1);
 
   for (const listener of nativeMessageListeners) {
     listener({

@@ -1,6 +1,13 @@
 # Parabolic Download Manager for Firefox
 
-Version `0.8.2` uses protocol v3 and the persistent Parabolic download service on Windows, Linux Flatpak and macOS. It is intentionally Firefox-only. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path and Firefox may be closed after a task is accepted.
+Version `0.9.0` uses protocol v3 and the persistent Parabolic download service on Windows, Linux Flatpak and macOS. It is intentionally Firefox-only. When a suitable video element appears, the add-on places a Parabolic download button over the player. The desktop window is not part of the normal download path and Firefox may be closed after a task or RSS subscription is accepted.
+
+The popup also exposes two explicit automation surfaces:
+
+- a direct HTTP/HTTPS field, with opt-in clipboard reading while the popup remains open;
+- RSS/Atom subscription creation, manual refresh and removal.
+
+The daemon owns subscription polling, duplicate suppression, task retries and post-processing. These operations do not depend on the Firefox background page remaining alive.
 
 ## Target user flow
 

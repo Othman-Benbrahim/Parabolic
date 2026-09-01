@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[2]
 
 manifest = json.loads((ROOT / "extension/firefox/manifest.json").read_text(encoding="utf-8"))
-assert manifest["version"] == "0.8.2"
+assert manifest["version"] == "0.9.0"
 assert manifest["browser_specific_settings"]["gecko"]["id"] == "parabolic-media-detector@othmanbenbrahim.dev"
 
 host_project = (ROOT / "Nickvision.Parabolic.NativeHost/Nickvision.Parabolic.NativeHost.csproj").read_text(encoding="utf-8-sig")
@@ -19,7 +19,7 @@ for project_path, project in (
     ET.parse(project_path)
     for expected in ("net10.0", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64"):
         assert expected in project
-    assert "2026.8.6" in project
+    assert "2026.9.0" in project
 
 daemon = (ROOT / "Nickvision.Parabolic.NativeHost/DaemonProtocol.cs").read_text(encoding="utf-8-sig")
 relay = (ROOT / "Nickvision.Parabolic.NativeHost/NativeHostRelay.cs").read_text(encoding="utf-8-sig")

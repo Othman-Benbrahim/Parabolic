@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import re
+from calendar import monthrange
 from collections import Counter
 from pathlib import Path
 
@@ -40,6 +42,10 @@ runtime_version = str(manifest["runtime-version"])
 require(
     "flatpak-github-actions:gnome-50" in workflow,
     "workflow must use the GNOME 50 Flatpak builder image",
+)
+require(
+    '"synchronize"' in workflow,
+    "pull-request commits must trigger a fresh Flatpak build",
 )
 require(runtime_version == "50", "application runtime must remain GNOME 50")
 require(
@@ -103,7 +109,7 @@ require(
 require("parabolic-pipes" in publish_script and "TMPDIR" in publish_script, "Native Messaging bridge must use the shared Flatpak pipe directory")
 require("flatpak run --command=org.nickvision.tubeconverter.NativeHost" in firefox_installer, "Firefox host launcher must enter the Parabolic sandbox")
 require("parabolic-media-detector@othmanbenbrahim.dev" in firefox_installer, "Firefox extension ID must be allowlisted")
-require("Parabolic-2026.8.6-flatpak-" in workflow, "architecture-specific Flatpak artifacts are required")
+require("Parabolic-2026.9.0-flatpak-" in workflow, "architecture-specific Flatpak artifacts are required")
 require("upload-artifact: false" in workflow, "Flatpak builder automatic artifact upload must be disabled")
 require("Upload Flatpak bundle" in workflow, "Flatpak bundles must be uploaded explicitly")
 require("firefox-flatpak-integration" in workflow, "Firefox integration helper artifact is required")
@@ -127,6 +133,24 @@ require(
     all(len(source.get("sha256", "")) == 64 for source in ffmpeg_sources),
     "every FFmpeg archive must have a SHA-256 digest",
 )
+ffmpeg_urls = [source.get("url", "") for source in ffmpeg_sources]
+retained_tag = re.compile(r"/autobuild-(\d{4})-(\d{2})-(\d{2})-\d{2}-\d{2}/")
+retained_matches = [retained_tag.search(url) for url in ffmpeg_urls]
+require(
+    all(match is not None for match in retained_matches),
+    "FFmpeg archives must use dated BtbN autobuild releases",
+)
+require(
+    len({match.group(0) for match in retained_matches if match}) == 1,
+    "FFmpeg architectures must come from the same BtbN release",
+)
+for match in retained_matches:
+    if match:
+        year, month, day = (int(value) for value in match.groups())
+        require(
+            day == monthrange(year, month)[1],
+            "FFmpeg must use BtbN's retained end-of-month release",
+        )
 
 print(
     f"Flatpak inputs OK: GNOME {runtime_version} runtime with GNOME 50 builder, "

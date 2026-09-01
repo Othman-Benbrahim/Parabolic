@@ -32,6 +32,33 @@
       <button id="downloadPageButton" class="primary-button" type="button">Quick download</button>
     </section>
 
+    <section class="tool-section">
+      <div class="tool-heading">
+        <strong>Direct HTTP link</strong>
+        <button id="pasteUrlButton" class="text-button" type="button">Paste</button>
+      </div>
+      <div class="input-action-row">
+        <input id="directUrlInput" type="url" inputmode="url" placeholder="https://example.com/file.mp4" aria-label="Direct HTTP URL">
+        <button id="downloadUrlButton" class="primary-button" type="button">Download</button>
+      </div>
+    </section>
+
+    <section class="tool-section">
+      <div class="tool-heading">
+        <strong>RSS subscriptions</strong>
+        <button id="checkFeedsButton" class="text-button" type="button">Check now</button>
+      </div>
+      <div class="input-action-row">
+        <input id="feedUrlInput" type="url" inputmode="url" placeholder="https://example.com/feed.xml" aria-label="RSS or Atom feed URL">
+        <button id="subscribeButton" class="primary-button" type="button">Follow</button>
+      </div>
+      <div class="feed-options">
+        <input id="feedKeywordInput" type="text" placeholder="Optional keywords: podcast, interview" aria-label="RSS keyword filter">
+        <label><input id="feedLatestOnly" type="checkbox" checked> Latest item only</label>
+      </div>
+      <div id="subscriptionList" class="subscription-list" aria-live="polite"></div>
+    </section>
+
     <div class="section-heading">
       <span id="mediaCount">Detected sources</span>
       <button id="clearButton" class="text-button" type="button">Clear</button>

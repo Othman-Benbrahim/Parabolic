@@ -15,7 +15,7 @@
     <SelfContained>true</SelfContained>
     <PublishSingleFile>false</PublishSingleFile>
     <PublishTrimmed>false</PublishTrimmed>
-    <Version>2026.8.6</Version>
+    <Version>2026.9.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,13 +27,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Nickvision.Parabolic.NativeHost\CollectionResolvers.cs" Link="Bridge\CollectionResolvers.cs" />
     <Compile Include="..\Nickvision.Parabolic.NativeHost\DaemonProtocol.cs" Link="Bridge\DaemonProtocol.cs" />
+    <Compile Include="..\Nickvision.Parabolic.NativeHost\DownloadTaskStateMachine.cs" Link="Bridge\DownloadTaskStateMachine.cs" />
     <Compile Include="..\Nickvision.Parabolic.NativeHost\MediaResolvers.cs" Link="Bridge\MediaResolvers.cs" />
     <Compile Include="..\Nickvision.Parabolic.NativeHost\NativeMessagingServer.cs" Link="Bridge\NativeMessagingServer.cs" />
     <Compile Include="..\Nickvision.Parabolic.NativeHost\NativeMessagingTransport.cs" Link="Bridge\NativeMessagingTransport.cs" />
     <Compile Include="..\Nickvision.Parabolic.NativeHost\NativeProtocolModels.cs" Link="Bridge\NativeProtocolModels.cs" />
     <Compile Include="..\Nickvision.Parabolic.NativeHost\NativeRequestException.cs" Link="Bridge\NativeRequestException.cs" />
     <Compile Include="..\Nickvision.Parabolic.NativeHost\PersistentDownloadCoordinator.cs" Link="Bridge\PersistentDownloadCoordinator.cs" />
+    <Compile Include="..\Nickvision.Parabolic.NativeHost\PostDownloadPipeline.cs" Link="Bridge\PostDownloadPipeline.cs" />
+    <Compile Include="..\Nickvision.Parabolic.NativeHost\RssSubscriptionService.cs" Link="Bridge\RssSubscriptionService.cs" />
   </ItemGroup>
 
 </Project>

@@ -184,7 +184,6 @@ public class DownloadService : IDisposable, IDownloadService
             pair.Value.ProgressChanged -= Download_ProgressChanged;
             pair.Value.Dispose();
         }
-        _scheduleTimer.Dispose();
         _completed.Clear();
         _logger.LogDebug($"Cleared {ids.Count} completed download(s).");
         return ids;
@@ -268,6 +267,7 @@ public class DownloadService : IDisposable, IDownloadService
         {
             _logger.LogDebug($"Retried download ({id}).");
             DownloadRetired?.Invoke(this, new DownloadEventArgs(id));
+            download.Options.TaskAttempt = Math.Max(1, download.Options.TaskAttempt) + 1;
             await AddAsync(download.Options, true);
             download.Completed -= Download_Completed;
             download.ProgressChanged -= Download_ProgressChanged;
@@ -294,6 +294,7 @@ public class DownloadService : IDisposable, IDownloadService
         foreach (var id in ids)
         {
             var download = _completed[id];
+            download.Options.TaskAttempt = Math.Max(1, download.Options.TaskAttempt) + 1;
             retryDownloadOptions.Add(download.Options);
             DownloadRetired?.Invoke(this, new DownloadEventArgs(id));
             download.Completed -= Download_Completed;

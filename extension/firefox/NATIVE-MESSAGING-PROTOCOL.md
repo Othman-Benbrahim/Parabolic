@@ -1,6 +1,6 @@
 # Parabolic Firefox Native Messaging Protocol
 
-This document is the implementation contract between Firefox add-on `0.8.x` and Parabolic `2026.8.6`. Protocol version `3` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe on Windows or Unix domain socket on Linux/macOS.
+This document is the implementation contract between Firefox add-on `0.9.x` and Parabolic `2026.9.0`. Protocol version `3` uses Firefox Native Messaging framing between Firefox and a lightweight relay. The relay forwards the same frames to the persistent per-user service over a secured named pipe on Windows or Unix domain socket on Linux/macOS.
 
 ## Host registration
 
@@ -74,7 +74,7 @@ Request payload:
 ```json
 {
   "extensionId": "parabolic-media-detector@othmanbenbrahim.dev",
-  "extensionVersion": "0.8.2",
+  "extensionVersion": "0.9.0",
   "protocolVersion": 3
 }
 ```
@@ -83,9 +83,9 @@ Response payload:
 
 ```json
 {
-  "appVersion": "2026.8.6",
+  "appVersion": "2026.9.0",
   "protocolVersion": 3,
-  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "ytdlp-update", "persistent-queue", "priority", "pause-resume", "list-downloads", "resolver-pipeline", "cobalt", "direct-media", "direct-stream-fallback", "hls-dash", "n-m3u8dl-re", "permalink-first", "bandwidth-limit", "scheduling", "url-renewal", "cdn-retry", "firefox-auth", "proxy-control"]
+  "capabilities": ["formats", "download", "progress", "cancel", "open-folder", "persistent-queue", "task-state-machine", "typed-errors", "automatic-task-retry", "post-processing-pipeline", "resolver-pipeline", "collections", "rss-subscriptions", "direct-http", "cross-platform-native-host"]
 }
 ```
 
@@ -153,7 +153,11 @@ Request payload:
   "networkStrategy": "balanced",
   "authenticationMode": "parabolic",
   "proxyMode": "parabolic",
-  "sendPageReferer": false
+  "sendPageReferer": false,
+  "maxTaskAttempts": 3,
+  "postProcessingSteps": ["verify-output"],
+  "groupKey": "",
+  "collectionId": ""
 }
 ```
 
@@ -232,12 +236,52 @@ Events are not request responses and use `type: "event"`:
     "priority": "normal",
     "resolver": "direct",
     "scheduledAt": null,
-    "speedLimitKbps": 2048
+    "speedLimitKbps": 2048,
+    "attempt": 1,
+    "maxAttempts": 3,
+    "errorCategory": null,
+    "retryable": null,
+    "actionHint": null,
+    "nextRetryAt": null,
+    "processingStep": null,
+    "sha256": null
   }
 }
 ```
 
-Status is one of `scheduled`, `queued`, `analyzing`, `downloading`, `paused`, `merging`, `completed`, `failed`, or `cancelled`. Progress is a number from 0 through 100 when known.
+Status is one of `scheduled`, `queued`, `analyzing`, `downloading`, `paused`, `processing`, `retry-scheduled`, `completed`, `failed`, or `cancelled`. Progress is a number from 0 through 100 when known. Failure events can include a typed `errorCategory`, whether the task is retryable, and an `actionHint`. The retry count is bounded by `maxTaskAttempts`, from 1 through 10.
+
+## RSS subscriptions
+
+`add-subscription` stores a local RSS or Atom subscription:
+
+```json
+{
+  "feedUrl": "https://example.com/feed.xml",
+  "title": "Example feed",
+  "autoDownload": true,
+  "downloadLatestOnly": true,
+  "keywordFilter": "interview,podcast",
+  "preset": "best",
+  "priority": "normal",
+  "pollMinutes": 180
+}
+```
+
+`list-subscriptions` and `check-subscriptions` use an empty payload. `remove-subscription` uses `{ "subscriptionId": "rss-..." }`. Polling and automatic downloads are performed by the persistent service and therefore continue after Firefox closes.
+
+## Collections
+
+`resolve-collection` previews up to 100 items through the registered collection resolvers:
+
+```json
+{
+  "url": "https://example.com/feed.xml",
+  "limit": 25
+}
+```
+
+RSS/Atom is the first implementation. Site, gallery and channel resolvers can be added behind the same contract.
 
 ## Persistent queue controls
 

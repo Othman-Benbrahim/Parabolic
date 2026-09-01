@@ -1,5 +1,15 @@
 let activeTab = null;
 let currentSettings = { quickDownloadPreset: "best", defaultPriority: "normal" };
+let clipboardWatchTimer = null;
+
+function isHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch (_) {
+    return false;
+  }
+}
 
 function readableSize(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -61,6 +71,124 @@ function setStatus(message, kind = "success") {
     statusState.hidden = false;
     errorState.hidden = true;
   }
+}
+
+async function pasteDirectUrl() {
+  try {
+    const granted = await browser.permissions.request({ permissions: ["clipboardRead"] });
+    if (!granted) {
+      throw new Error("Clipboard permission was not granted.");
+    }
+    const value = (await navigator.clipboard.readText()).trim();
+    if (!isHttpUrl(value)) {
+      throw new Error("The clipboard does not contain an HTTP or HTTPS URL.");
+    }
+    document.getElementById("directUrlInput").value = value;
+  } catch (error) {
+    setStatus(error.message || "Firefox could not read the clipboard.", "error");
+  }
+}
+
+async function downloadDirectUrl() {
+  const input = document.getElementById("directUrlInput");
+  const value = input.value.trim();
+  if (!isHttpUrl(value)) {
+    setStatus("Enter a valid HTTP or HTTPS URL.", "error");
+    return;
+  }
+  let title = "Direct download";
+  try {
+    title = decodeURIComponent(new URL(value).pathname.split("/").filter(Boolean).at(-1) || title);
+  } catch (_) {
+    // The URL was already validated.
+  }
+  await startDownload({
+    pageUrl: value,
+    mediaUrl: value,
+    title,
+    preset: currentSettings.quickDownloadPreset,
+    priority: currentSettings.defaultPriority,
+    sourceKind: "direct"
+  }, document.getElementById("downloadUrlButton"));
+}
+
+async function loadSubscriptions() {
+  const response = await browser.runtime.sendMessage({ type: "native-list-subscriptions" });
+  const list = document.getElementById("subscriptionList");
+  list.replaceChildren();
+  if (!response?.ok) {
+    return;
+  }
+  for (const subscription of response.result?.subscriptions || []) {
+    const row = document.createElement("div");
+    row.className = "subscription-item";
+    const title = document.createElement("span");
+    title.textContent = subscription.title || subscription.feedUrl;
+    title.title = subscription.lastError || subscription.feedUrl;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-subscription";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", async () => {
+      const removed = await browser.runtime.sendMessage({
+        type: "native-remove-subscription",
+        subscriptionId: subscription.id
+      });
+      if (removed?.ok) {
+        await loadSubscriptions();
+      } else {
+        setStatus(removed?.error?.message || "Unable to remove the subscription.", "error");
+      }
+    });
+    row.append(title, remove);
+    list.append(row);
+  }
+}
+
+async function addSubscription() {
+  const input = document.getElementById("feedUrlInput");
+  const feedUrl = input.value.trim();
+  if (!isHttpUrl(feedUrl)) {
+    setStatus("Enter a valid RSS or Atom feed URL.", "error");
+    return;
+  }
+  const response = await browser.runtime.sendMessage({
+    type: "native-add-subscription",
+    subscription: {
+      feedUrl,
+      title: new URL(feedUrl).hostname,
+      autoDownload: true,
+      downloadLatestOnly: document.getElementById("feedLatestOnly").checked,
+      keywordFilter: document.getElementById("feedKeywordInput").value.trim(),
+      preset: currentSettings.quickDownloadPreset,
+      priority: currentSettings.defaultPriority,
+      pollMinutes: 180
+    }
+  });
+  if (!response?.ok) {
+    setStatus(response?.error?.message || "Unable to add the subscription.", "error");
+    return;
+  }
+  input.value = "";
+  setStatus("RSS subscription saved.");
+  await loadSubscriptions();
+}
+
+function startClipboardWatcher() {
+  if (!currentSettings.watchClipboardInPopup || clipboardWatchTimer) {
+    return;
+  }
+  clipboardWatchTimer = setInterval(async () => {
+    try {
+      const value = (await navigator.clipboard.readText()).trim();
+      const input = document.getElementById("directUrlInput");
+      if (isHttpUrl(value) && input.value !== value) {
+        input.value = value;
+      }
+    } catch (_) {
+      // Clipboard access may be temporarily unavailable without user focus.
+    }
+  }, 2500);
 }
 
 async function startDownload(request, button) {
@@ -184,6 +312,18 @@ async function loadPopup() {
     browser.runtime.openOptionsPage();
     window.close();
   });
+  document.getElementById("pasteUrlButton").addEventListener("click", pasteDirectUrl);
+  document.getElementById("downloadUrlButton").addEventListener("click", downloadDirectUrl);
+  document.getElementById("subscribeButton").addEventListener("click", addSubscription);
+  document.getElementById("checkFeedsButton").addEventListener("click", async () => {
+    const response = await browser.runtime.sendMessage({ type: "native-check-subscriptions" });
+    if (!response?.ok) {
+      setStatus(response?.error?.message || "Unable to check subscriptions.", "error");
+      return;
+    }
+    setStatus(`${response.result?.discoveredItems || 0} new RSS item(s) found.`);
+    await loadSubscriptions();
+  });
   document.getElementById("clearButton").addEventListener("click", async () => {
     await browser.runtime.sendMessage({ type: "clear-media", tabId: activeTab.id });
     document.getElementById("mediaList").replaceChildren();
@@ -193,6 +333,8 @@ async function loadPopup() {
 
   const response = await browser.runtime.sendMessage({ type: "get-media", tabId: activeTab.id });
   currentSettings = { ...currentSettings, ...(response?.settings || {}) };
+  startClipboardWatcher();
+  await loadSubscriptions();
   const candidates = response?.candidates || [];
   document.getElementById("mediaCount").textContent = `Detected sources (${candidates.length})`;
   document.getElementById("emptyState").hidden = candidates.length !== 0;
@@ -204,4 +346,10 @@ async function loadPopup() {
 
 loadPopup().catch((error) => {
   setStatus(error.message || "Unable to inspect this tab.", "error");
+});
+
+window.addEventListener("unload", () => {
+  if (clipboardWatchTimer) {
+    clearInterval(clipboardWatchTimer);
+  }
 });
